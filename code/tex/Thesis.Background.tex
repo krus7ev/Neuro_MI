@@ -1,0 +1,424 @@
+\documentclass[12pt]{extarticle}
+\usepackage{amsfonts}
+\usepackage{amsmath, amsthm, amssymb}
+\renewcommand{\refname}{ References}
+\oddsidemargin = 20pt
+\topmargin = 0pt
+\headheight = 0pt
+\headsep = 0pt
+\textheight = 630pt
+\textwidth = 400pt
+\marginparsep = 5pt
+\marginparwidth = 0pt
+\footskip = 70pt
+\marginparpush = 5pt 
+\paperwidth = 597pt
+\paperheight = 845pt
+
+
+\title {\bf Calculating mutual information in metric spaces \\ Final Year BSc Project}
+\author{\large Kristian Krastev (kk12742) \\ Supervised by Conor Houghton}
+\date{}
+
+\begin{document}
+\maketitle
+\newpage
+\tableofcontents
+
+\newpage
+\addcontentsline{toc}{section}{Abstract}
+\section*{Abstract}
+\noindent
+Mutual information is a quantity that tells us how much knowledge of one
+variable reduces uncertainty about another one \cite{Thomas, Shannon}. It is a useful tool in many applications that rely on statistical models - for example
+in various types of clustering where one aims to maximise dependency within a
+partition. Typically, as with most information theory quantities, mutual
+information is estimated for variables that are either discrete or take values in a
+coordinate space. However, many important data types have distance metrics or
+measures of similarity, but no coordinates on them and thus no obvious
+integration measure. Datasets of such type are collected from
+electrophysiological experiments in neuroscience and gene expression data in 
+genetics and biochemistry, but also in other fields like image analysis and data
+retrieval.\\
+
+\noindent
+The purpose of this project is to implement and test an estimator for
+calculating mutual information between data, where one or both variables come
+from a metric space without coordinates. The model estimator itself has been
+described in \cite{HC14}, but not implemented and tested yet. It aims to
+provide a simple approach to the Kozachenko-Leonenko estimator for
+mutual information \cite{KL}, that extends it in order to apply to the broader
+class of metric-space data.\\
+
+\noindent
+The model is particularly relevant to neuroscience because it addresses the
+problem of calculating information theory quantities from the similarity
+measures on the space of spike trains. This is the application that motivates it
+and will serve as the main source of experimental data, used to test and
+adjust it.\\
+
+\noindent
+Application software will be developed in Python. It is the preferred choice
+over MATLAB for example, because it is a modern high-level language with nice
+syntax and structure that supports various coding styles. It also has the
+analogous libraries and packages relevant to the task - NumPy, SciPy, matplotlib
+etc. In addition to this, it offers interfaces to other tools for computational
+neuroscience and mathematics, which can be useful for the project.\\
+
+\noindent
+The implementation will first apply the suggested model to fictive data - both
+discrete and metric-space. Results will then be analysed and used to test it on
+real neuroscientific data. The proposed thesis will aim to investigate the
+model's correctness and evaluate its performance on various types of
+datasets.\\
+
+
+\newpage
+\addcontentsline{toc}{section}{Background}
+\section*{Background}
+\addcontentsline{toc}{subsection}{Problem outline}
+\subsection*{Problem outline} 
+\addcontentsline{toc}{subsubsection}{Estimating mutual information in metric spaces}
+\subsubsection*{Estimating mutual information in metric spaces}
+
+\noindent Information theory is the domain of applied mathematics that defines models and techniques for quantisation, storage and communication of information. It is based on probability theory and statistics and is therefore traditionally applied in spaces where an intuitive integration measure can be used in order for probability \textit{mass} or \textit{density} to be easily estimated. Typically these are coordinate spaces such as discrete vector spaces or integrable manifolds.\\
+
+\noindent The model under investigation tackles the problem of estimating information-theoretic quantities, namely \textit{mutual information} and \textit{relative entropy}, for variables taking values in the broader class of \textit{metric spaces}. These are sets with distances between all members defining a metric, without it necessarily invoking a coordinate system. An alternative approach is taken by defining a measure on metric spaces as the probability mass contained within a region.\\
+
+\noindent This chapter introduces the theoretic and scientific basis underlying the model and its application. First, the standard notions of information theory, as developed by Claude Shannon, are introduced, along with \textit{distance metrics} and \textit{metric spaces}. Next, the suggested approach to the outlined problem is described, and the metrics relevant to its application in the context of neuroscientific data are explored. Finally, the basic computational models for neural voltage dynamics are taken account of, as well as the tools and techniques used to simulate them numerically.\\
+
+
+\addcontentsline{toc}{subsubsection}{Measuring information}
+\subsubsection*{Measuring information}
+\noindent \textit{Entropy} is the central and fundamental notion in information theory \cite{Thomas}. It envelops the properties one would require of an information measure. In particular it measures the uncertainty associated with the outcome of a chance event, mathematically modelled by a random variable. It measures the average amount of information necessary to describe the random variable. First coined by Shannon \cite{Shannon}, the \textit{entropy} or \textit{average self-information} of a random variable $X$, taking values in a set of outcomes $\mathcal{X}$, is defined as the negative logarithms of distinct-outcome probabilities $\{p(x)|x\in\mathcal{X}\}$ summed and weighted over their probability distribution. This is given by the formula:
+
+\begin{equation} 
+H(X)=-\sum_{x \in \mathcal{X}} p(x)\log_2 p(x) 
+\end{equation}
+
+\noindent
+Taking the binary logarithm entropy measures the minimal expected size of outcome-encoding in binary bits. This can be thought of as the number of binary (yes or no) questions it would take on average to determine the outcome of an event modelled by a random variable if the questions are ordered efficiently - in descending order of outcome probability.\\ \\
+Shannon's proof of correctness of the above definition relies on the necessity for it to possess three key properties. Firstly, the information measure of a variable must be continuous in the probability of its outcome - ranging in $\left[0,1\right]$. Secondly, if the variable is uniformly distributed - which expresses maximum uncertainty or \textit{informativeness} associated with it - there must be a monotonically increasing relationship between the number of possible values it takes and its entropy. Thirdly, if a choice among the set of outcomes is split into successive choices among subsets, the entropy of the whole set should equal the weighted sum of entropies of the splits e.g..: $$H(\frac{1}{2},\frac{1}{3},\frac{1}{6})=H(\{\frac{1}{2}\},\{\frac{1}{3},\frac{1}{6}\})+\frac{1}{2}H(\{2\cdot\frac{1}{3}\},\{2\cdot\frac{1}{6}\})=H(\frac{1}{2},\frac{1}{2})+\frac{1}{2}H(\frac{2}{3},\frac{1}{3})$$
+
+\noindent \\ Being defined in terms of the probability distribution of the variable of interest, the notion of entropy can be extended to reflect joint (2) and conditional (3) probability distributions:\\ \\
+If $X$ and $Y$ are two events and $p(x,y)$ is the probability of the joint occurrence of outcomes $x$ and $y$, the entropy of the joint event is
+
+\begin{equation}
+H(X,Y)=-\sum_{x \in \mathcal{X}}\sum_{y \in\mathcal{Y}} p(x,y)\log_2 p(x,y)
+\end{equation}
+with the property:\\
+
+$H(X,Y)\leq H(X) + H(Y)$.\\
+
+\noindent
+The above is an equality if and only if $X$ and $Y$ are independent, i.e. iff $p(x,y)=p(x)p(y)$.\\
+
+\noindent For every outcome $y$ of $Y$ there is a \textit{conditional probability} $p(x|y)$ that the outcome of $X$ is $x$. The average of the entropy of $X$ over outcomes of $Y$, weighted by the probability of each outcome $y$, gives the conditional entropy of $X$ given $Y$:  
+
+
+\begin{equation}
+\begin{aligned}
+H(X|Y) &= \sum_{y\in\mathcal{Y}} p(y)H(X|Y=y)= -\sum_{y\in\mathcal{Y}}p(y)\sum_{x\in\mathcal{X}}p(x|y)\log_2 p(x|y)\\
+H(X|Y) &=-\sum_{y\in\mathcal{Y}}\sum_{x\in\mathcal{X}}p(x,y)\log_2 p(x|y)
+\end{aligned}
+\end{equation}
+This quantity measures the uncertainty associated with $X$ on average if the outcome of $Y$ is known.\\ \\
+The quantity of interest to this project - \textit{mutual information} - is based on the concept of \textit{relative entropy}, also known as \textit{Kullback-Leibler divergence}. \textit{Relative entropy} gives a measure of the distance between two probability distributions. It is defined as the mean weighted logarithm of their \textit{likelihood ratio} of the distributions:\\
+$$D(p||q)=\sum_{x\in\mathcal{X}}p(x)\log_2 \frac{p(x)}{q(x)}$$
+In the context of coding theory, the relative entropy $D(p||q)$ measures the inefficiency of encoding a random variable resulting from the assumption that its distribution is $q$ while it is in fact $p$. That is, encoding the outcome of $X$ would take on average $D(p||q)=H(q)-H(p)$ extra bits resulting in $H(p)+D(p||q)$ bits instead of $H(p)$ bits.\\ \\
+\textit{Mutual information} is defined as the relative entropy between the joint distribution of $X$ and $Y$ - $p(x,y)$ and the product distribution $p(x)p(y)$:
+$$I(X;Y)=\sum_{x\in\mathcal{X}}\sum_{y\in\mathcal{Y}}p(x,y)\log_2\frac{p(x,y)}{p(x)p(y)}$$
+It measures the amount of information one variable contains about another one or in other words, how much knowing one variable decreases uncertainty about another one. The mutual information between two variables equals zero if and only if they are statistically independent. This makes it a more powerful tool for establishing a relationship between two variables than \textit{correlation} because it is capable of describing a relationship even if it is not linear or monotonic.  \\
+
+\addcontentsline{toc}{subsubsection}{Metrics and similarity measures}
+\subsubsection*{Metrics and similarity measures}
+Given a space $\mathcal{X}$ a \textit{distance metric} is a function $Dis:\mathcal{X}\times\mathcal{X}\rightarrow\mathbb{R}$ s.t. $\forall x,y,z$ it has the properties:
+
+\begin{enumerate}
+\item \textbf{Positive:  }if $x\neq y$ $\Rightarrow$ $Dis(x,y)>0$
+\item \textbf{Symmetric: }$Dis(x,y) = Dis(y,x)$
+\item \textbf{Triangle inequality: }$Dis(x,z) \leq Dis(x,y) + Dis(y,z)$
+\end{enumerate}
+
+\noindent \\ \\Perhaps the most familiar distance metric is \textit{Euclidean distance} - the ordinary \textit{straight line} distance between two points in a vector space. It is defined as the square root of the sum of squared components over all dimensions in an $N$-dimensional space:
+\begin{equation}
+Dis_2 (x,y) = (\sum_{i=1}^{N} |x_i - y_i|^2)^{1/2}
+\end{equation}
+The notion is generalised by \textit{Minkowski distance} as a set of $L_p$\textit{-norms} for $p\geq1$ - the distance metrics for points in vector spaces that comply with the triangle inequality:
+\begin{equation} 
+Dis_p (x,y) = (\sum_{i=1}^{N} |x_i - y_i|^p)^{1/p}
+\end{equation}
+Euclidean distance is thus the $L_2$\textit{-norm}, whereas the $L_1$\textit{-norm} (where one "moves" only in orthogonal directions parallel to the coordinate axis) is known as \textit{Manhattan distance}.\\
+
+\noindent Numerous statistical and distance-based models employ Minkowski distance metrics in probability estimation, function regression, clustering and classification tasks as they are intrinsically compatible with data that can be naturally represented in a coordinate vector space.\\
+
+\noindent There exist however many other types of distance metrics that can be applied when the there is no meaningful representation of the problem's domain in vector space. Such metrics are very useful for measuring \textit{dissimilarity} in pattern recognition and string matching problems.\\
+
+\noindent A good example is \textit{Hamming distance}, also called \textit{edit-distance}, which counts the number of positions (components) in which two vectors differ. It is of particular importance to string matching - as an expression of dissimilarity between strings, based on their number of differing symbols (or bits), or to put it differently - the number of symbol-changes required to transform one string into another one. Although hamming distance is not a true $L_p$ norm, it does satisfy the triangle inequality and is indeed a true distance metric. It can be formalised as the $L_0$\textit{-norm} under the assumption that $0^0=0$ and $x^0=1$ otherwise - for $x\neq0$:
+\begin{equation}
+Dis_0(x,y)=\sum_{i=1}^{N}(x_i-y_i)^0=\sum_{i=1}^{N} I[x_i=y_i]
+\end{equation}
+
+\noindent This type of metrics can be in turn generalised from this perspective as a class of  \textit{edit-distance} metrics, possibly tailored to a particular problem or purpose.\\
+
+\noindent In the case of spike trains, there exist a range of edit-distance metrics which take into account structural characteristics based on spike timing, such as repeating patterns, that are considered to carry the semantics of neural signalling. This kind of meaning cannot always be conveyed by metrics mapping spike trains to a vector space, such as kernel-based metrics, which map them to a function space.\\
+
+\noindent The problem at hand is of the kind arising from the use of edit-distance metrics: a measure of dissimilarity, giving the distances between any two members of the set of all possible spike trains, together with the set itself, form a metric space. A method is needed for estimating information-theoretic quantities, and therefore probabilities, in a metric space. There is no meaningful coordinate system in such metric spaces but this does not rule out alternative methods for estimating probability densities. The proposed model \cite{HC14} takes the approach of the Kozachenko-Leonenko \cite{KL} entropy estimator, which estimates local densities based on $k$-nearest-neighbour distances. It modifies and extends it by using probability as a measure of region volumes, instead of depending on space dimensionality for this purpose, and thus addresses the problems associated with metric spaces.\\
+
+\noindent Being able to estimate such information theory quantities is important as it can aid the study and development of neurodynamics' coding theories and serve as a useful tool for quantifying relationships between neural activity. The relevance of such a model however is not constrained exclusively to the metric spaces of spike trains as there are many contexts in which non-coordinate distance metrics are also used.\\ \\
+
+\newpage
+\addcontentsline{toc}{subsection}{Approach}
+\subsection*{Approach}
+\addcontentsline{toc}{subsubsection}{Estimating information: possible routes}
+\subsubsection*{Estimating information: possible routes}
+\noindent
+One of the principle objectives of neuroscience is to demystify the mechanisms used by nerve cells to encode, process and communicate information. It is commonly accepted that neural information processing relies on the transmission of a sequence of stereotypical events. These are referred to as \textit{spikes} in the membrane potential difference as a function of time, caused by action potentials emitted by the neuron. The biophysical description of this process will be discussed in greater detail in the next section. Computational neuroscience is interested in investigating the structural properties of spike trains from a statistical point of view in order to identify the features conveying information between neurons. Although this is still an open problem, it is known that these include not only obvious features, such as the mere number of spikes fired by a neuron or a population of neurons, but also precise spike timing and more subtle features dependent on it, like patterns of intervals or activity - over time and across a population \cite{VJ02}.\\ 
+
+\noindent
+The theoretical framework employed to unravel these statistical properties is grounded in the foundations of information theory laid out by Shannon. Being able to quantify the information conveyed between neurons, combined with the appropriate experimental techniques and simulations, can be used to determine the key statistical features contained in spike trains \cite{VJ02}.\\
+
+\noindent
+The most straight-forward technique for information estimation is to brake up the domains of the variables of interest into partitions of finite size referred to as "bins", and approximate the respective standard equation discretely, using the fractions of points falling into these bins as local density estimates \cite{KRAS}. This kind of binning strategy can also be used for embedding spike trains into a space: the temporal window of observation of neural activity is subdivided into discrete time slices. Each of these bins can then correspond a distinct dimension - as for example in the traditional "direct" method proposed by Strong \textit{et al.} \cite{STRONG}.\\
+
+\noindent
+The problem with the above approach is that the bins must be very narrow in order to capture spike timing with good precision. This requires estimation of a tremendous amount of response probabilities as the number of possible spike distributions increases exponentially with the model's resolution. As the bias of such estimates is roughly proportional to the number of possibilities, it takes unrealistically large amounts of sample data in order for them to be accurate \cite{VJ02}. In fact, this is one of the main difficulties associated with measuring information-theoretic quantities. Furthermore high-dimensional spaces tend to be very sparse, which makes the issue even worse.\\
+
+\noindent
+The data problem is generally addressed by \textit{non-parametric} estimation methods. 
+The Kozachenko-Leonenko entropy estimator \cite{KL} is one such method which addresses the issue for data taking values in vector spaces. It is described as \textit{"a little-known asymptotically unbiased 'binless' estimator of differential entropy"} \cite{VJ02}. The basic idea behind this method is to use $k$-nearest neighbour distance statistics to estimate local densities, as first proposed in \cite{DOBR}. It has substantial computational advantages for estimating the entropy of a continuous distribution in a Euclidean vector space and is guaranteed to be unbiased in the limit of infinite sample data \cite{KL}. In \cite{VJ02} the Kozachenko-Leonenko method is adopted for the estimation of the rate of transmitted information through a neural "channel", which depends on entropy estimation. It is demonstrated that, under very weak assumptions, for a limited-sized sample data the method outperforms considerably traditional estimators relying on binning.\\
+
+\noindent
+Although this approach to entropy estimation dates back to \cite{DOBR}, for a long time it had not been adapted to estimate mutual information. A simple way to do this would be to make use of the chain rule for entropy and the definition of mutual information:\\
+
+\textit{Chain rule}
+\begin{equation}
+H(X,Y) = H(X) + H(Y|X) = H(Y) + H(X|Y)
+\end{equation}
+
+\textit{Mutual Information}
+\begin{equation}
+I(X;Y) = H(X) - H(X|Y) = H(Y) - H(Y|X)
+\end{equation}
+
+\noindent
+From the above it follows that mutual information can be expressed as:
+\begin{equation}
+I(X;Y) = H(X) + H(Y) - H(X,Y)
+\end{equation}
+
+\noindent
+The $k$-$th$ nearest neighbour estimator can be applied to individual terms. However this could mean that statistical errors incur from all individual entropy estimates. In \cite{KRAS} two slightly different algorithms both based on the ideas of Kozachenko and Leonenko are given which deal with this issue and are shown to produce satisfactory results. These however still depend on the dimensionality of the variables and cannot be applied directly to the broader class of metric spaces.\\
+
+\noindent
+Houghton and Tobin first propose a method for calculating mutual information in metric spaces in \cite{HC13}. Here the kernel density estimation technique (KDE) for approximating probability distributions is adapted to estimate local densities on metric space data. The model is motivated by the difficulty of estimating mutual information between discrete stimuli and spike-train responses.\\
+
+\noindent 
+It is noticed that for large enough sample sets the KDE estimator resembles a $k$-$th$ nearest neighbour estimator such as the one proposed in \cite{KRAS}. By using different values of $k$ in the subspaces of each variable the terms depending on their dimensionalities cancel. The method is tested against a histogram approach, which essentially follows the binning strategy, on fictive data, modelled to mimic the properties of spike trains and electrophysiological data. It is shown that the KDE estimator considerably outperforms the histogram approach as sample size and dimensionality/number of "spikes" increase. The metric-space method's estimation error is low and decreases as the amount of data grows, in contrast to the binning one which retains a relatively high error rate throughout.\\
+
+\noindent
+This leads to the model of interest, proposed by Houghton in \cite{HC14}, which builds on the results seen in \cite{HC13} and gives a method for estimating mutual information in both the cases when one variable is discrete and when both of the variables come from a metric space. The derivation is more straight-forward and intuitive - some of the complications associated with the KDE technique are omitted and the terms dependent on dimensionality in the $k$-$th$ nearest neighbour estimator introduced in \cite{KRAS} are avoided. In addition a formula is derived for estimating the Kullback-Leibler divergence between two probability distributions in the same metric space.\\
+
+
+\addcontentsline{toc}{subsubsection}{The proposed model: probability as a measure in open balls}
+\subsubsection*{The proposed model: probability as a measure in open balls}
+\noindent
+The lack of a coordinates necessitates the introduction of an alternative strategy for measuring volumes in a metric space. The basic idea in \cite{HC14} is that if $\mathcal{X}$ is a metric space it is possible to measure the distance $d(x,y)$ between any two points $x$ and $y$ and it is therefore possible to define a region, or \textit{open ball}, $B$ around a point $x_i$ of some volume $V$, and use the marginal probability mass contained in that region to measure its volume. The probability that such a region contains exactly $k$ out of $N$ possible sample points is given by the binomial distribution:
+
+\begin{equation}
+P_k(x_i) = \binom{N}{k}F_i^k(1-F_i)^{N-k}
+\end{equation}
+
+\noindent
+Here $F_i$ is the probability mass contained in region $B$. If we assume that the probability mass function is constant within the region, then it can be approximated by
+
+\begin{equation} 
+F_i \approx Vp_X(x_i).
+\end{equation}
+
+\noindent
+The justification for this is that variation in $p_X(x_i)$ should be negligible for the purposes of this approximation as long as the ball $B$ is small enough. The same assumption underlies the models in \cite{KL,KRAS}. On the other hand, the expected number of points in the region is given by 
+
+\begin{equation}
+\langle k \rangle = NF_i.
+\end{equation}
+
+\noindent
+Letting $\#[B]$ denote the number of points in region $B$ as estimated from the data, from the above it follows that
+
+\begin{equation} 
+NVp_X(x_i) \approx \#[B(x_i,V)].
+\end{equation}
+
+\noindent
+Expressing equation (1) for a finite sample set of size $N$ as 
+
+\begin{equation}
+H(X)=-\frac{1}{N}\sum_{i = 1}^{N} \log_2 p_X(x_i)
+\end{equation}
+and using the above approximation to estimate 
+
+\begin{equation}
+\log_2 p_X(x_i) \approx \log_2 \frac{\#[B(x_i,V)]}{NV}
+\end{equation}
+the entropy of a r.v. $X$ in metric space, using region-based local density estimates, can be given as
+
+\begin{equation}
+H(X) \approx \log_2N + \log_2V - \frac{1}{N} \sum_{i = 1}^{N} \log_2\#[B(x_i,V)].
+\end{equation}
+This formula is similar to the ones proposed in \cite{KL,KRAS} but it is simpler. The main difference is that the probability is estimated using the expected number of points in a region rather than the size of the ball containing a given number of points in a coordinate space. This approach is taken in order to avoid quantities that depend on integrable manifolds.\\
+
+\noindent
+Still a way to measure the volume of the region is needed. Since there is no obvious measure on a metric space without coordinates, it can be defined in terms of the probability distribution estimated from the data as the fraction of points falling in the region:
+
+\begin{equation}
+V\approx \frac{\#[B]}{N}.
+\end{equation}
+
+\noindent
+Using such a measure, together with the above approximation for $p_X(x)$, the probability would always equal $1$ and therefore it would always give a trivial estimate of entropy equal to $0$. Probability cannot be used as a measure to estimate the entropy of a single random variable as it becomes self-referential. Furthermore entropy is a quantity, the value of which depends strictly on the measure used in the domain of the respective variable. Mutual information however is not measure-dependent and it involves more than one variable. Therefore one probability distribution can be used as a measure for estimating others. This is the key idea underlying the suggested model.\\
+
+\noindent
+In \cite{HC14} two cases are considered reflecting two types of neuroscientific experiments. In the first, one of the variables is discrete, representing the stimulus - e.g. the location of a laboratory mouse on a 2D arena, and the other one takes values in a metric space - such as a spike train in the space of a similarity metric. In the second one, both random variables  take values in metric spaces.\\ 
+
+\noindent
+First the case when one variable is discrete is introduced. Given a discrete set of stimuli $\mathcal{S}$ of size $|\mathcal{S}|=n_s$, each presented exactly $n_t$ times (for simplicity), a total number of $N=n_sn_t$ spike-train responses from a set $\mathcal{R}$ are elicited. Using a similarity metric on the space of spike trains, regions around each sample point are defined of volume $V$ such that they contain exactly $h$ neighbouring samples, i.e. $V=h/N$ (the metrics themselves will be discussed in detail in the next subsection). With the total probability, $p_R(r)$, used as a measure the entropy equals zero as seen before, but it can be used for defining an estimate of conditional entropy, based on the conditioned probability: 
+
+\begin{equation}
+p_{R|S=s}(r) \approx \frac{\#[B]}{n_tV}.
+\end{equation}
+This is analogous to the approximation from equation (13). The entropy of $R$, conditioned on stimulus $s$ is then estimated by
+
+\begin{equation}
+\begin{aligned}
+H(R|S=s) &\approx - \frac{1}{n_t} \sum_{i=1}^{n_t} \log_2 \frac{\#[B(r_i, V)]}{n_tV} \\
+         &\approx - \frac{1}{n_t} \sum_{i=1}^{n_t} \log_2 \frac{n_s\#[B(r_i, h/N)]}{h}
+\end{aligned}
+\end{equation}
+Averaging over $s \in \mathcal{S}$ (equation (3)) this gives
+
+\begin{equation}
+H(R|S) \approx - \frac{1}{N} \sum_{i=1}^{N} \log_2 \frac{n_s\#[B(r_i, V)]}{h}.
+\end{equation}
+Using equation (8) the mutual between $R$ and $S$ information is derived as
+
+\begin{equation}
+I(R;S) \approx \frac{1}{N} \sum_{i=1}^{N} \log_2 \frac{n_s\#[B(r_i, V)]}{h}
+\end{equation}
+since $H(R)=0$ using the same measure.\\
+
+\noindent
+In the case where both variables $S$ and $R$ take values in metric spaces the probability mass functions $p_S(s)$ and $p_R(r)$ are used to measure volumes in $\mathcal{S}$ and $\mathcal{R}$ resulting in entropy estimates equal to zero. But these measures induce a measure on $\mathcal{S} \times \mathcal{R}$, which is the space where stimulus-response sample points live. A region, or \textit{square}, in $\mathcal{S} \times \mathcal{R}$ is then defined as the cross-section of open balls in $\mathcal{S}$ and $\mathcal{R}$:
+
+\begin{equation}
+S\left( s_i, r_i, \frac{h_1}{N}, \frac{h_2}{N} \right) = \left\{ (s,r) \in \mathcal{S} \times \mathcal{R} : s \in B_S\left(s_i, \frac{h_1}{N}\right), r \in B_R\left(r_i, \frac{h_2}{N}\right)\right\},
+\end{equation}
+that is the set of stimulus-response pairs where $s$ is one of the $h_1$ nearest neighbours of $s_i$ and $r$ is one of the $h_2$ nearest neighbours of $r_i$.\\
+
+\noindent
+Under this new measure the volume of the region is
+
+\begin{equation}
+\textnormal{vol } S\left( s_i, r_i, \frac{h_1}{N}, \frac{h_2}{N} \right) = \textnormal{vol } B_S\left(s_i, \frac{h_1}{N}\right) \cdot \textnormal{vol }B_R\left(r_i, \frac{h_2}{N}\right) \approx \frac{h_1h_2}{N^2}
+\end{equation}
+and thus mutual information is estimated by
+
+\begin{equation}
+I(R;S) \approx \frac{1}{N} \sum_{i=1}^{N} \log_2 \frac{N\#[S(s_i,r_i, h_1/N,h_2/N)]}{h_1h_2}.
+\end{equation}
+
+\noindent
+The resolution of this model given by the $h_1$ and $h_2$ parameters needs to be chosen appropriately. If they are too large the approximation given in equation (11) becomes less accurate due to the assumption that probability mass function is constant in the ball. If they are made too small on the other hand the accuracy of estimates in equations (13) and (17), where the mean value is estimated by counting, is decreased.\\
+
+\noindent
+It is important to note that when the two variables are independent the above equation gives an estimate of zero as required by the definition of mutual information. This is because there is a probability equal to $h_1/N$ for each of the $h_2$ points in $B_R(r_i, h_2/N)$ to be also in $B_S(s_i, h_1/N)$ which means that there are on average $h_1h_2/N$ points in $S(s_i,r_i,h_1/N,h_2/N)$, giving a probability estimate of 1.\\
+
+\noindent
+The same approach is applied to estimate the Kullback-Leibler diversion between the probability distributions of two random variables taking values in the same metric space. This time however the distribution of the second variable is used as a measure of the volume of the regions around instances of the first one. That is if $M$ instances are sampled from $R$ and $N$ - from $S$, then
+
+\begin{equation}
+\begin{aligned}
+d(R||S) &\approx \frac{1}{M} \sum_{i=1}^{M} \log_2 \frac{p_R(r_i)}{p_S(r_i)}\\
+		&\approx \frac{1}{M} \sum_{i=1}^{M} \log_2 \frac{N\#[B(r_i,h/N]}{Mh}
+\end{aligned}
+\end{equation}
+where $B$ contains the $h$ instances sampled from $S$ that are closest to $r_i$ and $\#[B]$ gives the number of points sampled from $R$ falling in the ball.\\
+
+\noindent
+Measuring the KL-divergence between the joint and product distributions of $(s,r)$ pairs in a metric space $\mathcal{X}^2$ in turn derives to the formula for mutual information: setting the volume to $h_1h_2/N^2$ for $N$ samples, equation (25) reduces to equation (24).\\
+
+\noindent
+The model described above aims to show that the Kozachenko-Leonenko approach for information estimation can be applied in this simple form to sample spaces without coordinates. The problem that inspires it arises from the difficulty with estimating information when electrophysiological data is embedded in high-dimensional euclidean spaces but it can be applied to a much broader range of context. If successful it could provide a framework for calculating information shared between any variables taking values in a space where a suitable similarity metric is defined. In the next part of this section the problem of assigning a distance measure between spike trains is discussed and the two state-of-the art solutions currently available are presented.\\
+
+\addcontentsline{toc}{subsubsection}{Spike-train metrics}
+\subsubsection*{Spike-train metrics}
+
+
+
+
+
+
+
+
+
+\newpage
+
+\subsection*{Scientific \& Technical Issues}
+\subsubsection*{Neural Biophysics and its Mathematical Representation \cite{NEUR}}
+\begin{itemize}
+\item Neuron structure. Dendrite. Axon. Chemical synapses. Gated Channels.
+\item Membrane potential. The Bucket Equation. Leaky Integrate-and-Fire Model.
+\item Action Potential. The Hodgkin-Huxley Model.
+\item Numerical Computation. Runge-Kutta $4^{th}$ Order.
+\end{itemize}
+
+\subsubsection*{Implementation and Testing}
+\begin{enumerate}
+\item Build an HH neural network model in Python. Simulate with RK4 approximation.
+\item Derive a kernel-based spike-train metric/adapt simulation data.
+\item Compute mutual information in Euclidean Space. Observe Results.
+\item Derive an edit-length distance metric on spike trains.
+\item Apply suggested model to compute mutual information in metric space. Observe results.
+\item Try to infer insight about network connectivity. Compare metrics and results.
+\end{enumerate}
+
+\newpage
+\addcontentsline{toc}{section}{References}
+\small{
+\begin{thebibliography}{} 
+	\bibitem{Thomas}{Cover TM, Thomas JA. (2006) Elements of information theory
+	-2nd ed. \emph{“A Wiley-Interscience publication.”} ISBN-13 978-0-471-24195-9.} 
+    
+	\bibitem{Shannon}{Shannon CE. (1948) A mathematical theory of
+	communication. \emph{Bell Syst. Tech. J.} 27: 379-423,623-656.}
+    
+    \bibitem{KL}{Kozachenko LF, Leonenko NN. (1987) Sample estimate of the entropy
+	of a random vector. \emph{Probl. Pereda. Inf.} 23: 9–16.}
+    
+	\bibitem{VJ02}{Victor JD. (2002) Binless strategies for estimation of information from 		neural data. \textit{Phys. Rev. E} 66, 051903.} 
+    
+    \bibitem{KRAS}{Kraskov A, St\"{o}gbauer H, Grassberger P. (2004) Estimating mutual information. \emph{Phys. Rev. E} 69, 066138.}
+        
+    \bibitem{STRONG}{Strong SP, Koberle R, de Ruyter van Steveninck RR, Bialek W. (1998) Entropy and information in neural spike trains \textit{Phys. Rev. Lett. 80}, 197-200}
+    
+    \bibitem{DOBR}{Dobrushin RL. (1958) A simplified method for experimental estimate of the entropy of a stationary sequence \textit{Theory Prob. Appl. 3}, 462}
+    
+    \bibitem{HC13}{Tobin RJ, Houghton CJ. (2013) A kernel-based calculation of spike train information. \textit{Entropy 15}, 4540–4552.}
+    
+    \bibitem{HC14}{Houghton CJ. (2015) Calculating mutual information for spike trains and other data with distances but no coordinates. \emph{R. Soc. open sci.} 2: 140391.}
+    
+    \bibitem{HCVJ}{Houghton CJ, Victor JD. (2012) Spike rates and spike metrics. \textit{Visual population codes: toward a common multivariate framework for cell recording and functional imaging} (eds N Kriegeskorte, G Kreiman), pp. 391-416. Cambridge, MA: MIT Press.}
+    
+    \bibitem{vR}{van Rossum M. (2001) A novel spike distance. \textit{Neural Computation}, 12:751-763.}
+    
+    \bibitem{V-P_1}{Victor JD and Purpura KP. (1996) Nature and precision of temporal coding in visual cortex: a metric-space analysis. \textit{Journal of Neurophysiology}, 76:1310-1326}
+    
+    \bibitem{V-P_2}{Victor JD and Purpura KP. (1996) Metric-space analysis of spike trains: theory, algorithms and application. \textit{Network: Computation in Neural Systems}, 8:127-164.}    
+    
+    \bibitem{NEUR}{References from the Computational Neuroscience course lecture notes.}
+
+\end{thebibliography}
+
+
+\end{document}
+}
