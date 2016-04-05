@@ -121,12 +121,8 @@ for d in range(-d_luft, d_luft) :
 MI_2_0_Avg = MI_2_0_Sum / (2*d_luft)
 #MI_2_1_Avg = MI_2_1_Sum / (alpha_res-1)
 
-#print 'Average MI(n2;n0) = ' + str(MI_2_0_Avg)
+print 'Average MI(n2;n0) = ' + str(MI_2_0_Avg)
 #print 'Average MI(n2;n1) = ' + str(MI_2_1_Avg)
-#e.g.:
-#Average MI(n2;n0) = 0.826254919525
-#Average MI(n2;n1) = 0.766732206785
-
 
 
 # Produce Graphs----------------------------------------------------------------

@@ -1,11 +1,9 @@
 Questions:
 
-- average fire rate of poisson neurons randomly varies between trials as synapse strength changes linearly
+-  average fire rate of poisson neurons randomly varies between trials as synapse strength changes linearly
 -  play around
 
 Todos:
-
-- implement the delay experiment
 
 - least square regression
 

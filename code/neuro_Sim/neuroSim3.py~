@@ -44,7 +44,7 @@ d_bin  = 10**(-len(str(d_luft)))
 h1 = 10                # size of open balls in spike-trrain metric space
 h2 = 10
 
-tau_vR = 10
+tau_vR = 1
 vR_metric = metric('vR', dt=dt, T=T, tau=tau_vR, mu=0)
 VP_metric = metric('VP', q=200)
 

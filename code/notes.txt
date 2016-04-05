@@ -1,11 +1,8 @@
 Questions:
 
--  average fire rate of poisson neurons randomly varies between trials as synapse strength changes linearly
--  play around
+-  properly set the average fire rate noise ????
 
 Todos:
-
-- implement the delay experiment
 
 - least square regression
 
