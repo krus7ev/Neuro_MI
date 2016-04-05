@@ -218,6 +218,7 @@ class pNeuron (object):
     self.sTrain = []             #spike times
     self.sTime  = st             #time of last spike
     self.count  = 0              #spike count over period T
+    self.T      = T
     
     time = np.arange(0, T, dt)
     for i, t in enumerate(time) :
@@ -225,7 +226,14 @@ class pNeuron (object):
       if x < sRate*dt :
         self.sTrain += [t]
         self.count += 1
-
+        
+  def delay(self, d):
+    i = 0
+    while i < len(self.sTrain):
+      self.sTrain[i] += d
+      if self.sTrain[i] > self.T or self.sTrain[i] < 0:
+        self.sTrain.pop(i)
+      i += 1
 
 
 # ------------------------------------------------------------------------------
@@ -363,7 +371,7 @@ class experiment(object):
 #-------------------------------------------------------------------------------
 def computeMI(S, R, metric, h1, h2) :
   N = len(S)
-  if h1 >= N or h2 >=N:
+  if h1 >= N or h2 >= N:
     raise Exception("h1 or h2 >= N!")
   
   h1h2 = h1*h2  #+1 like Laplace - (s,r) is counted in the ball  

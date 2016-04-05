@@ -3,9 +3,12 @@ import numpy as np
 import scipy as scp
 import matplotlib as mp
 import matplotlib.pyplot as plt
+from copy import deepcopy
 
 from pylab import *
 from neuro import *
+
+plt.switch_backend('QT4Agg')
     
 # Global parameters ------------------------------------------------------------
 mili  = 0.001          # Scaling factor 10^-3
@@ -27,16 +30,16 @@ IF = 2                 # Number of Integrate and Fire neurons
 P  = 2                 # Number of Poisson neurons
 N  = IF + P            # Total number of neurons
 
-minRate = 10           # maximum average spike-rate for poisson neurons
-maxRate = 50           # maximum average spike-rate for poisson neurons
+minRate = 20           # maximum average spike-rate for poisson neurons
+maxRate = 30           # maximum average spike-rate for poisson neurons
 rateRange = maxRate - minRate
 
-samples = []           # object storing experimental sample set
 data = []
 trials  = 30           # number of simulation rounds in experiment
 
-g_res = 30             # no. of synapse strength steps over [0,1] ~> resolution
-g_bin = 1.0/g_res      # width of synapse strength step based on g_res
+delay  = 0.125
+d_luft = 50
+d_bin  = 10**(-len(str(d_luft)))
 
 h1 = 10                # size of open balls in spike-trrain metric space
 h2 = 10
@@ -45,7 +48,7 @@ tau_vR = 1
 vR_metric = metric('vR', dt=dt, T=T, tau=tau_vR, mu=0)
 VP_metric = metric('VP', q=200)
 
-metric = VP_metric
+metric = vR_metric
 
 MI_2_0 = []
 MI_2_0_Sum = 0
@@ -53,62 +56,72 @@ MI_2_0_Sum = 0
 MI_2_1 = []
 MI_2_1_Sum = 0
 
+g = 0.8               # synapse 2-0 and 3-1 strength == 1 minus 2-1 or 3-0
 
 # Experiments Simulation--------------------------------------------------------
-
-# Convey experiment over a variation of synapse strengths
-for g in range(1, g_res) :
-  g *= g_bin
-  sample = experiment()
-  cMat = np.array([[  0,   0,  0,  0],
-                   [  0,   0,  0,  0],
-                   [  g, 1-g,  0,  0],
-                   [1-g,   g,  0,  0]])
+#set up network topology
+sample = experiment()
+cMat = np.array([[  0,   0,  0,  0],
+                 [  0,   0,  0,  0],
+                 [  g, 1-g,  0,  0],
+                 [1-g,   g,  0,  0]])
 
 # simulate network a number of trials to generate sample data
-  for r in range(trials) :
-#   Initialise network parameters
-    Vs = V_res + np.random.rand(IF)*(V_th - V_res)
-    sTs = -t_M + np.random.rand(N)*t_M
-    sRates = minRate + np.random.rand(P)*(rateRange)
+for r in range(trials) :
+# Initialise network parameters
+  Vs = V_res + np.random.rand(IF)*(V_th - V_res)
+  sTs = -t_M + np.random.rand(N)*t_M
+  sRates = minRate + np.random.rand(P)*(rateRange)
+  
+  neurons = []
+  for i in range(IF) :
+    neurons.append(neuron(i, Vs[i], sTs[i], E_l, V_th, V_res, R_m, I_e, t_M, t_Ref))
+  for i in range(IF, N) :
+    pN = pNeuron(i, sRates[i-IF], T, dt, sTs[i])
+    pN.delay(delay)
+    neurons.append(pN)
 
-    neurons = []
-    for i in range(IF) :
-      neurons.append(neuron(i, Vs[i], sTs[i], E_l, V_th, V_res, R_m, I_e, t_M, t_Ref))
-    for i in range(IF, N) :
-      neurons.append(pNeuron(i, sRates[i-IF], T, dt, sTs[i]))
+# Simulate network and save data
+  sample.simulation += [netSim(neurons, cMat, T, dt)]
+  Vs, Gs, raster = sample.simulation[-1].simulate()
 
-#   Simulate network and save data
-    sample.simulation += [netSim(neurons, cMat, T, dt)]
-    Vs, Gs, raster = sample.simulation[-1].simulate()
+  sample.population += [neurons]
+#  sample.VsResults  += [Vs]
+#  sample.GsResults  += [Gs]
+#  sample.rasters    += [raster]
 
-    sample.population += [neurons]
-#    sample.VsResults  += [Vs]
-#    sample.GsResults  += [Gs]
-#    sample.rasters    += [raster]
+#assemble together spike trains elicited from each neuron over trials
+neuro_var = []
+for n in range(IF):
+  s_trains = []
+  for r in range(trials):
+    s_trains += [sample.population[r][n].sTrain]
+  neuro_var += [s_trains]
+for n in range(IF, N):
+  neuro_var += [[]]
 
-# add experiment results to samples set    
-  samples += [sample]
- 
-# assemble together spike trains elicited from each neuron over trials
-  neuro_var = []
-  for n in range(N):
+# Compute mutual information sliding trhough different delays
+for d in range(-d_luft, d_luft) :
+  d *= d_bin
+# add delay to poisson trains
+  for n in range(IF, N):
     s_trains = []
     for r in range(trials):
-      s_trains += [samples[-1].population[r][n].sTrain]
-    
-    neuro_var += [s_trains]
-   
+      pN = deepcopy(sample.population[r][n])
+      pN.delay(d)
+      s_trains += [pN.sTrain]
+    neuro_var[n] = s_trains
+
   MI_2_0 += [computeMI(neuro_var[2], neuro_var[0], metric, h1, h2)]
   MI_2_0_Sum += MI_2_0[-1]
   
 #  MI_2_1 += [computeMI(neuro_var[2], neuro_var[1], metric, h1, h2)]
 #  MI_2_1_Sum += MI_2_1[-1]
 
-MI_2_0_Avg = MI_2_0_Sum / (g_res-1)
-#MI_2_1_Avg = MI_2_1_Sum / (g_res-1)
+MI_2_0_Avg = MI_2_0_Sum / (2*d_luft)
+#MI_2_1_Avg = MI_2_1_Sum / (alpha_res-1)
 
-print 'Average MI(n2;n0) = ' + str(MI_2_0_Avg)
+#print 'Average MI(n2;n0) = ' + str(MI_2_0_Avg)
 #print 'Average MI(n2;n1) = ' + str(MI_2_1_Avg)
 #e.g.:
 #Average MI(n2;n0) = 0.826254919525
@@ -132,15 +145,16 @@ plt.xlabel('$Spike$ $times$ $[s]$', fontsize=20)
 show()
 
 #plot MI
-g_range = [a*g_bin for a in range(1,g_res)]
-g_range_ = [1-g for g in g_range]
+d_lays = [d*d_bin for d in range(-d_luft,d_luft)]
+#d_lays_ = [1-d for d in d_lays]
 figure(2)
-plot(g_range, g_range) 
-scatter(g_range, MI_2_0)
+#plot(d_lays, alpha) 
+scatter(d_lays, MI_2_0)
 show()
+
 '''
 figure(3)
-plot(g_range, g_range_)
-scatter(g_range, MI_2_1)
+plot(alpha, alpha_)
+scatter(alpha, MI_2_1)
 show()
 '''

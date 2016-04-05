@@ -1,0 +1,14 @@
+Questions:
+
+- average fire rate of poisson neurons randomly varies between trials as synapse strength changes linearly
+-  play around
+
+Todos:
+
+- implement the delay experiment
+
+- least square regression
+
+- make the whole thing like a proper command line tool with options - for different simulations/parameters (and defaults as well)
+  and add some more terminal feedback about the process too
+ 

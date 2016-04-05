@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 
 from pylab import *
 from neuro import *
+
+plt.switch_backend('QT4Agg')
     
 # Global parameters ------------------------------------------------------------
 mili  = 0.001          # Scaling factor 10^-3
@@ -27,21 +29,22 @@ IF = 2                 # Number of Integrate and Fire neurons
 P  = 2                 # Number of Poisson neurons
 N  = IF + P            # Total number of neurons
 
-minRate = 30           # minimum spike-rate for poisson neurons
-maxRate = 90           # maximum spike-rate for poisson neurons
+minRate = 10           # maximum average spike-rate for poisson neurons
+maxRate = 50           # maximum average spike-rate for poisson neurons
+rateRange = maxRate - minRate
 
 samples = []           # object storing experimental sample set
 data = []
 trials  = 30           # number of simulation rounds in experiment
 
-alpha_res = 25
-alpha_bin = 1.0/alpha_res
-
+g_res = 30             # no. of synapse strength steps over [0,1] ~> resolution
+g_bin = 1.0/g_res      # width of synapse strength step based on g_res
 
 h1 = 10                # size of open balls in spike-trrain metric space
 h2 = 10
 
-vR_metric = metric('vR', dt=dt, T=T, tau=t_S, mu=0)
+tau_vR = 1
+vR_metric = metric('vR', dt=dt, T=T, tau=tau_vR, mu=0)
 VP_metric = metric('VP', q=200)
 
 metric = VP_metric
@@ -56,8 +59,8 @@ MI_2_1_Sum = 0
 # Experiments Simulation--------------------------------------------------------
 
 # Convey experiment over a variation of synapse strengths
-for g in range(1, alpha_res) :
-  g *= alpha_bin
+for g in range(1, g_res) :
+  g *= g_bin
   sample = experiment()
   cMat = np.array([[  0,   0,  0,  0],
                    [  0,   0,  0,  0],
@@ -69,7 +72,7 @@ for g in range(1, alpha_res) :
 #   Initialise network parameters
     Vs = V_res + np.random.rand(IF)*(V_th - V_res)
     sTs = -t_M + np.random.rand(N)*t_M
-    sRates = np.random.rand(P)*(maxRate - minRate)
+    sRates = minRate + np.random.rand(P)*(rateRange)
 
     neurons = []
     for i in range(IF) :
@@ -82,9 +85,9 @@ for g in range(1, alpha_res) :
     Vs, Gs, raster = sample.simulation[-1].simulate()
 
     sample.population += [neurons]
-    sample.VsResults  += [Vs]
-    sample.GsResults  += [Gs]
-    sample.rasters    += [raster]
+#    sample.VsResults  += [Vs]
+#    sample.GsResults  += [Gs]
+#    sample.rasters    += [raster]
 
 # add experiment results to samples set    
   samples += [sample]
@@ -101,14 +104,14 @@ for g in range(1, alpha_res) :
   MI_2_0 += [computeMI(neuro_var[2], neuro_var[0], metric, h1, h2)]
   MI_2_0_Sum += MI_2_0[-1]
   
-  MI_2_1 += [computeMI(neuro_var[2], neuro_var[1], metric, h1, h2)]
-  MI_2_1_Sum += MI_2_1[-1]
+#  MI_2_1 += [computeMI(neuro_var[2], neuro_var[1], metric, h1, h2)]
+#  MI_2_1_Sum += MI_2_1[-1]
 
-MI_2_0_Avg = MI_2_0_Sum / (alpha_res-1)
-MI_2_1_Avg = MI_2_1_Sum / (alpha_res-1)
+MI_2_0_Avg = MI_2_0_Sum / (g_res-1)
+#MI_2_1_Avg = MI_2_1_Sum / (g_res-1)
 
 print 'Average MI(n2;n0) = ' + str(MI_2_0_Avg)
-print 'Average MI(n2;n1) = ' + str(MI_2_1_Avg)
+#print 'Average MI(n2;n1) = ' + str(MI_2_1_Avg)
 #e.g.:
 #Average MI(n2;n0) = 0.826254919525
 #Average MI(n2;n1) = 0.766732206785
@@ -131,15 +134,15 @@ plt.xlabel('$Spike$ $times$ $[s]$', fontsize=20)
 show()
 
 #plot MI
-alpha = [a*alpha_bin for a in range(1,alpha_res)]
-alpha_ = [1-a for a in alpha]
+g_range = [a*g_bin for a in range(1,g_res)]
+g_range_ = [1-g for g in g_range]
 figure(2)
-plot(alpha, alpha) 
-scatter(alpha, MI_2_0)
+plot(g_range, g_range) 
+scatter(g_range, MI_2_0)
 show()
-
+'''
 figure(3)
-plot(alpha, alpha_)
-scatter(alpha, MI_2_1)
+plot(g_range, g_range_)
+scatter(g_range, MI_2_1)
 show()
-
+'''
