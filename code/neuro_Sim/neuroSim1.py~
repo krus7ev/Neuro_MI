@@ -1,14 +1,16 @@
 from __future__ import division
+
+from neuro import *
+
 import numpy as np
 import scipy as scp
 import matplotlib as mp
 import matplotlib.pyplot as plt
 
-from pylab import *
-from neuro import *
+plt.switch_backend('QT4Agg')
     
 # Global parameters ------------------------------------------------------------
-mili  = 0.001          # Scaling factor 10^-3
+mili  = 0.001         # Scaling factor 10^-3
 
 E_l   = -70*mili      # Standard reverse potential 
 V_th  = -54*mili      # Vth = -40 [mV]
@@ -23,7 +25,7 @@ T1    = 0.3           # simulation period [s]
 T2    = 0.2
 T3    = 1
 t_S   = 10*mili       # Time scale of the synapse
-
+tau_vR = 12*mili
 
 # Network connectivity structure -----------------------------------------------
 #weight matrix := 16x16, layered full connectivity
@@ -81,15 +83,18 @@ for i in range(2):
 # Compute van Rossum distance---------------------------------------------------
 # convert spike trains to functions
 mu = 0
-n0_vR = vR_mapTrain(Neurons[0].sTrain, dt, T, t_S, mu)
-n1_vR = vR_mapTrain(Neurons[1].sTrain, dt, T, t_S, mu)
+n0_vR = vR_mapTrain(Neurons[0].sTrain, dt, T, tau_vR, mu)
+n1_vR = vR_mapTrain(Neurons[1].sTrain, dt, T, tau_vR, mu)
 
-dist_01_vR, diff_01_vR = vR_computeDistance(n0_vR, n1_vR, dt);
-print "dist_van_Rossum(nrn_0, nrn_1) = ", dist_01_vR
+dist_01_vR, diff_01_vR = vR_computeDistance_mappedTrains(n0_vR, n1_vR, dt);
+print "numerical dist_van_Rossum(nrn_0, nrn_1) = ", dist_01_vR
+
+dist_01_vR_2 = vR_computeDistance(Neurons[0].sTrain, Neurons[1].sTrain, tau_vR)
+print "analythic dist_van_Rossum(nrn_0, nrn_1) = ", dist_01_vR_2
 
 
 # Compute Victor Purpura distance-----------------------------------------------
-q = 10
+q = 200
 dist_01_VP = VP_computeDistance(Neurons[0].sTrain, Neurons[1].sTrain, q)
 
 print "dist_VictorPurpura(nrn_0, nrn_1) = ", dist_01_VP
@@ -99,33 +104,33 @@ print "dist_VictorPurpura(nrn_0, nrn_1) = ", dist_01_VP
 # Plot Graphs-------------------------------------------------------------------
 
 #plot voltages of neuron 1 & 2
-figure(1)
-p1, = plot(time, Vs[0], 'g')  
-p2, = plot(time, Vs[1], 'r')
+plt.figure(1)
+p1, = plt.plot(time, Vs[0], 'g')  
+p2, = plt.plot(time, Vs[1], 'r')
 plt.xlabel('$t$ $[s]$', fontsize=15)
 plt.ylabel('$V_m$', fontsize=15)
-show()
+plt.show()
 
-'''
-#plot condictances of neuron 1 & 2
-figure(2)
-p1, = plot(time, Gs[0], 'g')  
-p2, = plot(time, Gs[1], 'r')
+
+#plot conductances of neuron 1 & 2
+plt.figure(2)
+p1, = plt.plot(time, Gs[0], 'g')  
+p2, = plt.plot(time, Gs[1], 'r')
 plt.xlabel('$t$ $[s]$', fontsize=15)
 plt.ylabel('$G_s$', fontsize=15)
-show()
-'''
+plt.show()
+
 
 #plot raster
-figure(3)
-ylim([-1, N])
-yticks(np.arange( 0, N, 1))
-xticks(np.arange(0, T, 0.05))
-p3 = plot(time, np.transpose(raster), 'b.')
+plt.figure(3)
+plt.ylim([-1, N])
+plt.yticks(np.arange( 0, N, 1))
+plt.xticks(np.arange(0, T, 0.05))
+p3 = plt.plot(time, np.transpose(raster), 'b.')
 plt.grid()
 plt.ylabel('$Neuron$ $indices$', fontsize=20)
 plt.xlabel('$Spike$ $times$ $[s]$', fontsize=20)
-show()
+plt.show()
 
 
 #plot van Rossum functions
@@ -142,7 +147,7 @@ ax[2].set_ylabel('$van$ $Rossum$ \n $(n_0-n_1)$', fontsize=20)
 plt.show()
 
 
-''' TEST FOR POISSON SPIKES
+# Test Poisson distribution spike generatiom
 T = 1
 counts=[]
 for i in range(100):
@@ -154,5 +159,6 @@ minim = min(counts)
 
 plt.figure(4)
 plt.hist(counts, bins=(maxim-minim+1), range=(minim, maxim))
+plt.xlabel('$Spiking$ $rate$ $r$', fontsize=15)
+plt.ylabel('$Number$ $of$ $occurances$ $\\propto$ $P$ $(r)$', fontsize=15)
 plt.show()
-'''

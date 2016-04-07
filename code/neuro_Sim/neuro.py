@@ -3,7 +3,7 @@ import numpy as np
 import math
 import scipy as scp
 import matplotlib as mp
-from pylab import *
+#from pylab import *
 import matplotlib.pyplot as plt
 
 # ==============================================================================
@@ -66,9 +66,9 @@ class synapse:
     self.G_s_23     = 0
     self.G_s_4      = 0
     for i in range(len(self.preSynGs)):
-      self.G_s_1  += 0.5*self.preSynGs[i]*exp(- self.preSynTs[i] / self.t_s)
-      self.G_s_23 += 0.5*self.preSynGs[i]*exp(-(self.preSynTs[i] + 0.25*self.dt)/self.t_s)
-      self.G_s_4  += 0.5*self.preSynGs[i]*exp(-(self.preSynTs[i] + self.dt)/self.t_s)
+      self.G_s_1  += 0.5*self.preSynGs[i]*math.exp(- self.preSynTs[i] / self.t_s)
+      self.G_s_23 += 0.5*self.preSynGs[i]*math.exp(-(self.preSynTs[i] + 0.25*self.dt)/self.t_s)
+      self.G_s_4  += 0.5*self.preSynGs[i]*math.exp(-(self.preSynTs[i] + self.dt)/self.t_s)
     return self.G_s_1
 
 
@@ -257,6 +257,25 @@ def getPoissonTrain(T, dt, sRate) :
 # ------------------------------------------------------------------------------
 # Functions implementing van Rossum metric
 # ------------------------------------------------------------------------------
+def vR_computeDistance(u, v, tau) :
+  dist = 0
+  for i in range(len(u)):
+    for j in range(len(u)):
+      dist +=   math.exp(- abs(u[i] - u[j])/tau)
+      
+  for i in range(len(v)):
+    for j in range(len(v)):
+      dist +=   math.exp(- abs(v[i] - v[j])/tau)
+      
+  for i in range(len(u)):
+    for j in range(len(v)):
+      dist -= 2*math.exp(- abs(u[i] - v[j])/tau)
+      
+  dist = math.sqrt(dist)
+  
+  return dist
+
+
 # filter spike train through exponential kernel to translate in vR form---------
 def vR_mapTrain(spikes, dt, T, tau, mu) :
   time = np.arange(0, T, dt)
@@ -265,24 +284,24 @@ def vR_mapTrain(spikes, dt, T, tau, mu) :
   for i, t_i in enumerate(time) :
     for j in range(len(spikes)) :
       t = t_i - spikes[j]
-      h[i] += (1-mu)*tau*exp(-t/tau) if t >= 0 else 0
+      h[i] += (1-mu)*math.exp(-t/tau) if t >= 0 else 0
       
   return h 
 
 # calculate distance between spike trains in van Rossum form--------------------
-def vR_computeDistance(f1, f2, dt) :
+def vR_computeDistance_mappedTrains(f1, f2, dt) :
   diff = np.zeros(len(f1))
   dist = 0
   for i in range(len(f1)) :
     diff[i] = f1[i] - f2[i]  
     dist += diff[i]*diff[i]*dt
     
-  dist = sqrt(dist)
+  dist = math.sqrt(dist)
 
   return dist, diff
+  
+  
 
-  
-  
 # ------------------------------------------------------------------------------
 # Function implementing Victor-Purpura spike-time metric
 # ------------------------------------------------------------------------------    
@@ -307,7 +326,6 @@ def VP_computeDistance(t1, t2, q) :
 
 
 
-
 # ------------------------------------------------------------------------------
 # objects to store the settings for a metric
 # ------------------------------------------------------------------------------
@@ -316,14 +334,19 @@ class metric(object):
     self.type = name
     
     if name == 'vR':
+      self.tau = tau
+     
+    elif name == 'VP':
+      self.q  = q
+
+#OLD INEFFICIENT WAY      
+'''    
+    if name == 'vR_old':
       self.dt  = dt
       self.T   = T
       self.tau = tau
       self.mu  = mu
-      
-    elif name == 'VP':
-      self.q  = q
-
+''' 
 
 
 
@@ -333,8 +356,27 @@ class metric(object):
 def getDistanceMap(trains, metric):
   N = len(trains)
   dMap = np.zeros([N,N])
+
+  for i in range(N):
+    for j in range(N):
+      if dMap[j][i] != 0 :
+        dMap[i][j] = dMap[j][i]
+      elif i != j :      
+        if metric.type == 'vR':
+          dMap[i][j] = vR_computeDistance(trains[i], trains[j], metric.tau)
+        elif metric.type == 'VP':
+          dMap[i][j] = VP_computeDistance(trains[i], trains[j], metric.q)
   
-  if metric.type == 'vR':  
+  return dMap
+
+#OLD VERISON WITH INEFFICIENT VAN ROSSUM FIRST MAPPING TO NUMERICALLY 
+#APPRXIMATED FUNCTION AND THEN DOING EUCLIDEAN DISTANCE
+'''
+def getDistanceMap(trains, metric):
+  N = len(trains)
+  dMap = np.zeros([N,N])
+  
+  if metric.type == 'vR_old':  
     vR_trains = []
     for t in range(N):
       vR_trains += [vR_mapTrain(trains[t], metric.dt, metric.T, metric.tau, metric.mu)]
@@ -345,11 +387,12 @@ def getDistanceMap(trains, metric):
         dMap[i][j] = dMap[j][i]
       elif i != j :      
         if metric.type == 'vR':
-          dMap[i][j], dif = vR_computeDistance(vR_trains[i], vR_trains[j], metric.dt)
+          dMap[i][j], dif = vR_computeDistance_mappedTrains(vR_trains[i], vR_trains[j], metric.dt)
         elif metric.type == 'VP':
           dMap[i][j] = VP_computeDistance(trains[i], trains[j], metric.q)
   
   return dMap
+'''
 
   
   

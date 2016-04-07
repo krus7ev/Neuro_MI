@@ -1,13 +1,28 @@
 from __future__ import division
+
+from neuro import *
+
 import numpy as np
 import scipy as scp
 import matplotlib as mp
 import matplotlib.pyplot as plt
 
-from pylab import *
-from neuro import *
-
 plt.switch_backend('QT4Agg')
+
+# EXPERIMENTAL NETWORK CONNECTIVITY
+#
+# Integrate-and-fre neurons {0,1}
+#
+#       0     1     
+#       ^     ^
+#       |\1-g/|
+#       | \ / |
+#     g |  x  | g        Synapse strength g in [0,1]
+#       | / \ |
+#       |/   \|
+#       2     3
+#        
+# Poisson neurons {2,3}
     
 # Global parameters ------------------------------------------------------------
 mili  = 0.001          # Scaling factor 10^-3
@@ -43,10 +58,11 @@ g_bin = 1.0/g_res      # width of synapse strength step based on g_res
 h1 = 10                # size of open balls in spike-trrain metric space
 h2 = 10
 
-tau_vR = 1
-vR_metric = metric('vR', dt=dt, T=T, tau=tau_vR, mu=0)
+tau_vR = 12*mili
+vR_metric = metric('vR', tau = tau_vR)
 VP_metric = metric('VP', q=200)
 
+#metric = vR_metric
 metric = VP_metric
 
 MI_2_0 = []
@@ -56,7 +72,7 @@ MI_2_1 = []
 MI_2_1_Sum = 0
 
 
-# Experiments Simulation--------------------------------------------------------
+# Experiment Simulation---------------------------------------------------------
 
 # Convey experiment over a variation of synapse strengths
 for g in range(1, g_res) :
@@ -120,29 +136,47 @@ print 'Average MI(n2;n0) = ' + str(MI_2_0_Avg)
 
 # Produce Graphs----------------------------------------------------------------
 
-#plot raster
+# Plot Mutual Information
+
+#set up x values (g - for conductance)
+g_range  = [a*g_bin for a in range(1,g_res)]
+#use this to plot a line with slope -1 descending from y=1 till y=0
+g_range_ = [1-g for g in g_range]
+
+#perform linear regression on generated data
+y = np.array(MI_2_0)
+x = np.array(g_range)
+A = np.vstack([x, np.ones(len(x))]).T
+m, c = np.linalg.lstsq(A, y)[0]
+
+#scatter Mutual Information between neurons 0 & 1 
+#and plot fitted line
+plt.figure(2)
+plt.plot(x, m*x + c)
+plt.plot(x, x) 
+plt.scatter(x, y)
+plt.ylabel('$Mutual$ $information$ $I(n_2;n_0)$', fontsize=20)
+plt.xlabel('$Synapse$ $strength$ $g_{2,0}$', fontsize=20)
+plt.show()
+
+'''
+plt.figure(3)
+plt.plot(g_range, g_range_)
+plt.scatter(g_range, MI_2_1)
+plt.ylabel('$Mutual$ $information$ $I(n_2;n_1)$', fontsize=20)
+plt.xlabel('$Synapse$ $strength$ $g_{2,1}$', fontsize=20)
+plt.show()
+'''
+
+# Check out latest raster plot
 time = np.arange(0, T, dt)
 
-figure(1)
-ylim([-1, N])
-yticks(np.arange( 0, N, 1))
-xticks(np.arange(0, T, 0.05))
-p3 = plot(time, np.transpose(raster), 'b.')
+plt.figure(1)
+plt.ylim([-1, N])
+plt.yticks(np.arange( 0, N, 1))
+plt.xticks(np.arange(0, T, 0.05))
+p3 = plt.plot(time, np.transpose(raster), 'b.')
 plt.grid()
 plt.ylabel('$Neuron$ $indices$', fontsize=20)
 plt.xlabel('$Spike$ $times$ $[s]$', fontsize=20)
-show()
-
-#plot MI
-g_range = [a*g_bin for a in range(1,g_res)]
-g_range_ = [1-g for g in g_range]
-figure(2)
-plot(g_range, g_range) 
-scatter(g_range, MI_2_0)
-show()
-'''
-figure(3)
-plot(g_range, g_range_)
-scatter(g_range, MI_2_1)
-show()
-'''
+plt.show()

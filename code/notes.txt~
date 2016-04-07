@@ -1,12 +1,43 @@
-Questions:
+QUESTIONS:
 
--  average fire rate of poisson neurons randomly varies between trials as synapse strength changes linearly
--  play around
+-  How to properly set the average fire rate randomness/noise ?
 
-Todos:
+-  What is a good tau values for for van Rossum metric? 
+   Different tau give different metrics and different clusteres [Narayan.2006 := 12ms best clustering]
 
-- least square regression
+-  What is a good value for q - cost factor for Victor Purpura metric ?
+
+-  Aren't we interested in the deviations from the overall tendency - i.e. regression line??
+
+
+TO CODE:
+  
+- FIX PLOTS: 
+    * PUT LABELS, 
+    * get rid of double plt libs
+    * TIDY UP 
 
 - make the whole thing like a proper command line tool with options - for different simulations/parameters (and defaults as well)
   and add some more terminal feedback about the process too
  
+ 
+ 
+TO WRITE:
+
+- see if will be using synapse-like vR metric and remove if necessary
+  see if will be implementing efficient (linear-time) vR computation and elaborate on it
+
+---> see if will be giving a working example using Earth-mover Distance and edit background accordingly
+
+---> introduce Bucket equation directly - drop bucket analogy
+
+---> clarify the section on poisson neurons: determinism in rich topology ~ randomness
+
+
+---> PLAN & START chapter on code and implementation
+
+---> PLAN & START chapter on experiments results analysis conclusions
+
+
+
+>>>>>FINISH AND SUBMIT NEUROSCIENCE ASSIGNMENT 1<<<<<
