@@ -50,13 +50,13 @@ rateRange = maxRate - minRate
 
 samples = []           # object storing experimental sample set
 data = []
-trials  = 30           # number of simulation rounds in experiment
+trials  = 48           # number of simulation rounds in experiment
 
-g_res = 30             # no. of synapse strength steps over [0,1] ~> resolution
+g_res = 50             # no. of synapse strength steps over [0,1] ~> resolution
 g_bin = 1.0/g_res      # width of synapse strength step based on g_res
 
-h1 = 10                # size of open balls in spike-trrain metric space
-h2 = 10
+h1 = 12                # size of open balls in spike-trrain metric space
+h2 = 12
 
 tau_vR = 12*mili
 vR_metric = metric('vR', tau = tau_vR)
@@ -120,29 +120,29 @@ for g in range(1, g_res) :
   MI_2_0 += [computeMI(neuro_var[2], neuro_var[0], metric, h1, h2)]
   MI_2_0_Sum += MI_2_0[-1]
   
-#  MI_2_1 += [computeMI(neuro_var[2], neuro_var[1], metric, h1, h2)]
-#  MI_2_1_Sum += MI_2_1[-1]
+  MI_2_1 += [computeMI(neuro_var[2], neuro_var[1], metric, h1, h2)]
+  MI_2_1_Sum += MI_2_1[-1]
 
 MI_2_0_Avg = MI_2_0_Sum / (g_res-1)
-#MI_2_1_Avg = MI_2_1_Sum / (g_res-1)
+MI_2_1_Avg = MI_2_1_Sum / (g_res-1)
 
 print 'Average MI(n2;n0) = ' + str(MI_2_0_Avg)
-#print 'Average MI(n2;n1) = ' + str(MI_2_1_Avg)
+print 'Average MI(n2;n1) = ' + str(MI_2_1_Avg)
+
 #e.g.:
 #Average MI(n2;n0) = 0.826254919525
 #Average MI(n2;n1) = 0.766732206785
 
 
-
 # Produce Graphs----------------------------------------------------------------
 
 # Plot Mutual Information
-
 #set up x values (g - for conductance)
 g_range  = [a*g_bin for a in range(1,g_res)]
 #use this to plot a line with slope -1 descending from y=1 till y=0
 g_range_ = [1-g for g in g_range]
 
+# MI(Neuron_2; Neuron_0)
 #perform linear regression on generated data
 y = np.array(MI_2_0)
 x = np.array(g_range)
@@ -151,27 +151,33 @@ m, c = np.linalg.lstsq(A, y)[0]
 
 #scatter Mutual Information between neurons 0 & 1 
 #and plot fitted line
-plt.figure(2)
-plt.plot(x, m*x + c)
-plt.plot(x, x) 
-plt.scatter(x, y)
+plt.figure(1)
+plt.plot(x, m*x + c, linestyle='--', color='black')
+plt.plot(g_range, g_range, linestyle='dotted', color='black') 
+plt.scatter(g_range, MI_2_0, marker = '+', color = 'black')
 plt.ylabel('$Mutual$ $information$ $I(n_2;n_0)$', fontsize=20)
 plt.xlabel('$Synapse$ $strength$ $g_{2,0}$', fontsize=20)
 plt.show()
 
-'''
-plt.figure(3)
-plt.plot(g_range, g_range_)
-plt.scatter(g_range, MI_2_1)
+
+# MI(Neuron_2; Neuron_0)
+#perform linear regression
+y = np.array(MI_2_1)
+m, c = np.linalg.lstsq(A, y)[0]
+
+plt.figure(2)
+plt.plot(x, m*x + c, linestyle='--', color='black')
+plt.plot(g_range, g_range_, linestyle='dotted', color='black')
+plt.scatter(g_range, MI_2_1, marker = '+', color = 'black')
 plt.ylabel('$Mutual$ $information$ $I(n_2;n_1)$', fontsize=20)
 plt.xlabel('$Synapse$ $strength$ $g_{2,1}$', fontsize=20)
 plt.show()
-'''
+
 
 # Check out latest raster plot
 time = np.arange(0, T, dt)
 
-plt.figure(1)
+plt.figure(3)
 plt.ylim([-1, N])
 plt.yticks(np.arange( 0, N, 1))
 plt.xticks(np.arange(0, T, 0.05))

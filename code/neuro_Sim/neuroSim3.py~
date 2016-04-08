@@ -47,18 +47,18 @@ P  = 2                 # Number of Poisson neurons
 N  = IF + P            # Total number of neurons
 
 minRate = 10           # maximum average spike-rate for poisson neurons
-maxRate = 50           # maximum average spike-rate for poisson neurons
+maxRate = 20           # maximum average spike-rate for poisson neurons
 rateRange = maxRate - minRate
 
 data = []
-trials  = 30           # number of simulation rounds in each experiment
+trials  = 250           # number of simulation rounds in each experiment
 
 delay  = 0.125
-d_luft = 50
+d_luft = 75
 d_bin  = 10**(-len(str(d_luft)))
 
-h1 = 10                # size of open balls in spike-trrain metric space
-h2 = 10
+h1 = 25                # size of open balls in spike-trrain metric space
+h2 = 25
 
 tau_vR = 12*mili
 vR_metric = metric('vR', tau=tau_vR)
@@ -165,13 +165,7 @@ d_lays = [d*d_bin for d in range(-d_luft,d_luft)]
 
 plt.figure(2)
 plt.scatter(d_lays, MI_2_0)
-plt.ylabel('$Mutual$ $information$ #I', fontsize=20)
-plt.xlabel('$Spike$ $times$ $[s]$', fontsize=20)
+plt.ylabel('$Mutual$ $information$ $I(n_2;n_0)$', fontsize=20)
+plt.xlabel('$Poisson$ $spikes$  $delay$ $[s]$', fontsize=20)
 plt.show()
 
-'''
-figure(3)
-plot(alpha, alpha_)
-scatter(alpha, MI_2_1)
-show()
-'''

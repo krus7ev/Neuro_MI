@@ -14,7 +14,7 @@ N=51
 x = np.random.rand(N)*2
 y = np.random.rand(N)
 
-
+t4 = np.linspace(0.0, 1.0, 1000)    #integrate over[0,3] with DT=1.0
 
 
 
@@ -30,10 +30,7 @@ fig = plt.gcf()
 fig.gca().add_artist(circle1)
 
 plt.scatter(x[idx],y[idx],facecolor='none', edgecolor='0.0')
-
-#USING THIS SCRIPT TO TEST RANDOM STUFF
-#t4 = np.linspace(0.0, 1.0, 1000)    #integrate over[0,3] with DT=1.0
-#plt.plot(t4, t4, linestyle='dotted', color='black')
+plt.plot(t4, t4, linestyle='dotted', color='black')
 
 ptr_x = x[idx] + 0.3*cos(1)
 ptr_y = y[idx] + 0.3*sin(1)
