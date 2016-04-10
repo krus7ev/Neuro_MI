@@ -50,11 +50,10 @@ minRate = 10           # maximum average spike-rate for poisson neurons
 maxRate = 20           # maximum average spike-rate for poisson neurons
 rateRange = maxRate - minRate
 
-data = []
 trials  = 250           # number of simulation rounds in each experiment
 
 delay  = 0.125
-d_luft = 75
+d_luft = 60
 d_bin  = 10**(-len(str(d_luft)))
 
 h1 = 25                # size of open balls in spike-trrain metric space
@@ -62,7 +61,7 @@ h2 = 25
 
 tau_vR = 12*mili
 vR_metric = metric('vR', tau=tau_vR)
-VP_metric = metric('VP', q=200)
+VP_metric = metric('VP', q=166)
 
 metric = VP_metric
 

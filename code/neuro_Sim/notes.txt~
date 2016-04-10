@@ -1,4 +1,6 @@
+>>>>>===========================================<<<<<
 >>>>>FINISH AND SUBMIT NEUROSCIENCE ASSIGNMENT 1<<<<<
+>>>>>===========================================<<<<<
 
 SETUP NOTES:
 
@@ -15,10 +17,9 @@ SETUP NOTES:
 
 TO CODE:
 
--> change exp3 to simulate network multiple times at each time step of the delay to compute the mean and standard deviation
-
 -> put all plots one graph (exp2)
 
+-> Make legends (exp2 - add mean and pearson coeff)
 -> optimise: use np.arrays wherever possible
 
 EXTRAS:
@@ -30,7 +31,6 @@ EXTRAS:
 TO WRITE/EDIT:
 
 >Background
--> edit paragraph on Earth-mover Distance and extensions in Background
 -> introduce Bucket equation directly - drop bucket analogy
 -> clarify the section on poisson neurons: determinism in rich topology ~ randomness
 

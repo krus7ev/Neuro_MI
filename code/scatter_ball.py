@@ -15,9 +15,6 @@ x = np.random.rand(N)*2
 y = np.random.rand(N)
 
 
-
-
-
 x_med = np.median(x)
 
 idx = [item for sublist in np.nonzero(x == np.median(x)) for item in sublist]
