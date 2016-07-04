@@ -8,14 +8,14 @@ import matplotlib as mp
 import matplotlib.pyplot as plt
 
 plt.switch_backend('QT4Agg')
-    
+
 # Global parameters ------------------------------------------------------------
 mili  = 0.001         # Scaling factor 10^-3
 
-E_l   = -70*mili      # Standard reverse potential 
+E_l   = -70*mili      # Standard reverse potential
 V_th  = -54*mili      # Vth = -40 [mV]
 V_res = -80*mili      # Reset membrane potential
-R_m   = 1             # Rm = 1[M_ohm] 
+R_m   = 1             # Rm = 1[M_ohm]
 I_e   = 18*mili       # Ie = 3.1[nA]
 t_M   = 30*mili       # tau_m = 10[ms] = C_m*Rm time constant of the membrane
 t_Ref = 5*mili        # Refractory period = 5[ms]
@@ -29,9 +29,9 @@ tau_vR = 12*mili
 
 # Network connectivity structure -----------------------------------------------
 #weight matrix := 16x16, layered full connectivity
-N = 16
-L = N/4
-cB   = np.roll(np.eye(L), 1, 1)            #4x4 box repeating in the matrix
+N  = 16
+L  = N/4
+cB = np.roll(np.eye(L), 1, 1)            #4x4 box repeating in the matrix
 cB[:,0] = 0
 cR   = np.concatenate((cB,cB,cB,cB), 1)    #row of boxes
 cMat = np.concatenate((cR,cR,cR,cR))       #full matrix
@@ -43,7 +43,7 @@ cMat *= 0.6                                #scaled by constant synapse weight
 Vs = V_res + np.random.rand(N)*(V_th - V_res)
 sTs = -t_M + np.random.rand(N)*t_M
 
-Neurons = []    
+Neurons = []
 for i in range(N) :
   Neurons.append(neuron(i, Vs[i], sTs[i], E_l, V_th, V_res, R_m, I_e, t_M, t_Ref))
 
@@ -56,7 +56,7 @@ Vs_1, Gs_1, raster_1 = sim1.simulate()
 #2nd part - T2
 for i in range(N):
   Neurons[i].i = 72*mili if i % L == 0 else I_e
- 
+
 sim2 = netSim(Neurons, cMat, T2, dt, h_t = T1)
 Vs_2, Gs_2, raster_2 = sim2.simulate()
 
@@ -105,7 +105,7 @@ print "dist_VictorPurpura(nrn_0, nrn_1) = ", dist_01_VP
 
 #plot voltages of neuron 1 & 2
 plt.figure(1)
-p1, = plt.plot(time, Vs[0], 'g')  
+p1, = plt.plot(time, Vs[0], 'g')
 p2, = plt.plot(time, Vs[1], 'r')
 plt.xlabel('$t$ $[s]$', fontsize=15)
 plt.ylabel('$V_m$', fontsize=15)
@@ -114,7 +114,7 @@ plt.show()
 
 #plot conductances of neuron 1 & 2
 plt.figure(2)
-p1, = plt.plot(time, Gs[0], 'g')  
+p1, = plt.plot(time, Gs[0], 'g')
 p2, = plt.plot(time, Gs[1], 'r')
 plt.xlabel('$t$ $[s]$', fontsize=15)
 plt.ylabel('$G_s$', fontsize=15)
@@ -154,7 +154,7 @@ counts=[]
 for i in range(100):
   t, c = getPoissonTrain(T, dt, 120)
   counts += [c]
-  
+
 maxim = max(counts)
 minim = min(counts)
 
