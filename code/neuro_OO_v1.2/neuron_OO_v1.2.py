@@ -5,6 +5,8 @@ import matplotlib as mp
 from pylab import *
 import matplotlib.pyplot as plt
 
+plt.switch_backend('QT4Agg')
+
 # LIF neuron - parameters, state, functions computing membrane potential  
 # ------------------------------------------------------------------------------
 class neuron (object):    
@@ -45,8 +47,10 @@ class neuron (object):
       self.spike_t = t - dt
       if self.sK:
         self.Gk += 0.005/Mega
-      
-    self.v += self.f(self.v)*dt
+    
+    else :  
+      self.v += self.f(self.v)*dt
+    
     if self.sK:
       self.Gk += -self.Gk/self.tk*dt
     return self.v
@@ -165,11 +169,14 @@ sim  = neuronSim(n1, T, dt)
 v1   = sim.integrate()
 time = np.arange(0, T, dt)
 
-figure(1)
-plot(time, v1)
+figure(1,dpi=120)
+plot(time, v1, color='black')
+ylabel('$Membrane$ $Potential$ $[V]$', fontsize=23)
+xlabel('$Simulation$ $time$ $[s]$', fontsize=23)
+xticks(arange(0, T+0.05, 0.05))
 show()
 
-# ------------------Q2: Mminimum current for a skpike---------------------------
+# ------------------Q2: Minimum current for a spike---------------------------
 # 1)Set the potential higher than the threshold
 #   E_l + R_m * I_e > V_th
 # 2)Rearange to express I_e
@@ -184,8 +191,11 @@ n2  = neuron(E_l, V_th, V_res, V_res, R_m, I_e, t_m, t_ref, t_ref)
 sim = neuronSim(n2, T, dt)
 v2  = sim.integrate()
 
-figure(2)
-plot (time,v2)
+figure(2,dpi=120)
+plot (time,v2, color='black')
+ylabel('$Membrane$ $Potential$ $[V]$', fontsize=23)
+xlabel('$Simulation$ $time$ $[s]$', fontsize=23)
+xticks(arange(0, T+0.05, 0.05))
 show()
 
 # ------------------Q4: Ranging current simulation------------------------------
@@ -200,8 +210,10 @@ for i in range (20, 51):
     
 Is = np.linspace(2.0, 5.0, 31)
 
-figure(3)
-plot(Is, f_rates)
+figure(3,dpi=120)
+plot(Is, f_rates, color='black')
+xlabel('$Input$ $current$ $I_e$ $[nA]$', fontsize=23)
+ylabel('$Firing$ $rate$ $[spikes/T=1s]$', fontsize=23)
 show()
 
 # ------------------Q5: Coupled Neurons simulation------------------------------
@@ -220,11 +232,30 @@ for i in range(N):
   neurons += [neuron(E_l, V_th, V_res, Vs[i], R_m, I_e, t_m, t_ref, sTs[i])]
 
 ns1 = netSim(neurons, synMat, T, dt)
-Vs = ns1.simulate()
+Vs_E = ns1.simulate()
 
-figure(4)
-p1, = plot(time, Vs[0], 'g')  
-p2, = plot(time, Vs[1], 'r')
+neurons = []
+Vs = V_res + np.random.rand(N)*(V_th - V_res)
+sTs = -t_ref + np.random.rand(N)*(0, t_ref)
+for i in range(N):
+  neurons += [neuron(E_l, V_th, V_res, Vs[i], R_m, I_e, t_m, t_ref, sTs[i], E_s=-80*mili)]
+
+ns2 = netSim(neurons, synMat, T, dt)
+Vs_I = ns2.simulate()
+
+f, ax = plt.subplots(2, sharex=True, dpi=120)
+p1, = ax[0].plot(time, Vs_E[0], 'g', label='$neuron_0$ excitatory')  
+p2, = ax[0].plot(time, Vs_E[1], 'r', label='$neuron_1$ excitatory')
+ax[0].set_ylabel('$Membrane$ $Potential$ $[V]$', fontsize=17)
+p3, = ax[1].plot(time, Vs_I[0], 'g', label='$neuron_0$ inhibitory')  
+p4, = ax[1].plot(time, Vs_I[1], 'r', label='$neuron_1$ inhibitory')
+ax[1].set_ylabel('$Membrane$ $Potential$ $[V]$', fontsize=17)
+ax[1].set_xlabel('$Simulation$ $time$ $[s]$', fontsize=19)
+xticks(arange(0, T+0.05, 0.05))
+ax[0].legend()
+ax[0].set_ylim(-0.085, -0.045)
+ax[1].legend()
+ax[1].set_ylim(-0.085, -0.045)
 show()
 
 
@@ -237,6 +268,9 @@ n6    = neuron(E_l, V_th, V_res, V_res, R_m, I_e, t_m, t_ref, t_ref, slow_K = 1)
 sim   = neuronSim(n6, T, dt)
 v6    = sim.integrate()
 
-figure(5)
-plot(time, v6)
+figure(5,dpi=120)
+plot(time, v6, color='black')
+ylabel('$Membrane$ $Potential$ $[V]$', fontsize=23)
+xlabel('$Simulation$ $time$ $[s]$', fontsize=23)
+xticks(arange(0, T+0.05, 0.05))
 show()

@@ -1,0 +1,420 @@
+from __future__ import division
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import pyplot, mpl, cm
+from copy import deepcopy
+import numpy as np
+import scipy as scp
+import matplotlib as mp
+import matplotlib.pyplot as plt
+import scipy as scp
+import pylab as plab
+import math
+plt.switch_backend('QT4Agg')
+
+# Srtore spike-times together with their
+#-------------------------------------------------------------------------------
+class spikeLoc (object) :
+  def __init__(self,X, Y, Train) :
+    self.x = X
+    self.y = Y
+    self.t = Train
+
+# Store a set of spike trains with ids and initial coordinates 
+# ------------------------------------------------------------------------------    
+class trainsLoc (object) :
+  def __init__(self, Trains, Xs, Ys) :
+    self.trains = Trains
+    self.ids    = []
+    self.xs     = Xs
+    self.ys     = Ys
+    
+    
+# objects to store the settings for a metric
+# ------------------------------------------------------------------------------
+class metric(object):
+  def __init__(self, name, tau=None, q=None):
+    self.type = name
+    if name == 'vR':
+      self.tau = tau
+    elif name == 'VP':
+      self.q  = q
+   
+
+# Find the position of the rat at each spike-time using interpolation
+# ------------------------------------------------------------------------------    
+def interFirePos (X, Y, time, sTrain) :
+  nX = []; nY = []
+  t = 0
+  for i in range(len(sTrain)) :
+    while time[t] <= sTrain[i] :
+      t += 1
+    t -= 1
+    if time[t] == sTrain[i] :
+      interX = X[t]
+      interY = Y[t]
+    else :  
+      interX = X[t] + (X[t+1]-X[t])*(sTrain[i]-time[t])/(time[t+1]-time[t])
+      interY = Y[t] + (Y[t+1]-Y[t])*(sTrain[i]-time[t])/(time[t+1]-time[t])  
+    nX += [interX]
+    nY += [interY]
+
+  return spikeLoc(nX, nY, sTrain)
+
+  
+# Split the whole spike train into 1s trains and reccord the position
+# of the rat in the beginning of the spike train
+# ------------------------------------------------------------------------------    
+def interTrainsPos (X, Y, T, sTrain) :
+  Trains, Xs, Ys = [], [], []
+  End = np.ceil(max(sTrain))
+  i, t = 0, 0
+  for s in range(1, int(End+1)) :
+    train = []
+    ends = float(s)
+    while sTrain[i] < ends :
+      train += [sTrain[i]]
+      if i+1 < len(sTrain):
+        i += 1
+      else :
+        break
+    Trains += [train]
+    while T[t] <= ends-1.0 :
+      t += 1
+    t -= 1
+    Xs += [X[t]]
+    Ys += [Y[t]]
+  
+  return trainsLoc(Trains, Xs, Ys)
+  
+  
+# Group spike trains by space bin
+# ------------------------------------------------------------------------------    
+def binTrainsXY (tL, X, Y, dxy) :
+  Xbins = np.arange(0, np.ceil(max(X)/dxy)*dxy, dxy) 
+  Ybins = np.arange(0, np.ceil(max(Y)/dxy)*dxy, dxy) 
+  binTrains = []
+  tL.ids = [i for i in range(len(tL.trains))]
+  for i, bi in enumerate(Ybins) :
+    bin_row = []
+    for j, bj in enumerate(Xbins) :
+      train_bin = trainsLoc([],[],[])
+      for t in range(len(tL.trains)) :
+        if (tL.ys[t] > bi and tL.ys[t] < bi + dxy and
+            tL.xs[t] > bj and tL.xs[t] < bj + dxy)  :
+            train_bin.trains += [tL.trains[t]]
+            train_bin.ids += [tL.ids[t]]
+            train_bin.xs += [tL.xs[t]]            
+            train_bin.ys += [tL.ys[t]]
+      bin_row += [deepcopy(train_bin)]
+    binTrains += [deepcopy(bin_row)]
+
+  return binTrains
+
+
+# Function implementing Victor-Purpura spike-time metric
+# ------------------------------------------------------------------------------    
+def VP_computeDistance(t1, t2, q) :
+# manage corner cases
+  if len(t1) == 0 and len(t2) == 0:
+    return 1000
+  if len(t1) == 0 :
+    return len(t2)
+  if len(t2) == 0 : 
+    return len(t1)
+# compute using dynamic programming algorithm    
+  G = np.zeros([len(t1), len(t2)])
+  G[:, 0] = [i for i in range(len(t1))]
+  G[0, :] = [i for i in range(len(t2))]
+  for i in range(1, len(t1)) :
+    for j in range(1, len(t2)) :
+      G[i][j] = min(G[i-1][j-1] + q*abs(t1[i]-t2[j]), G[i-1][j]+1, G[i][j-1]+1)
+      
+  return G[-1][-1]
+
+
+# Function implementing van Rossum metric
+# ------------------------------------------------------------------------------
+def vR_computeDistance(u, v, tau) :
+  dist = 0
+  for i in range(len(u)):
+    for j in range(len(u)):
+      dist +=   math.exp(- abs(u[i] - u[j])/tau)      
+  for i in range(len(v)):
+    for j in range(len(v)):
+      dist +=   math.exp(- abs(v[i] - v[j])/tau)  
+  for i in range(len(u)):
+    for j in range(len(v)):
+      dist -= 2*math.exp(- abs(u[i] - v[j])/tau)      
+  dist = math.sqrt(dist)
+  
+  return dist
+
+
+# Compute distance matrix given a set of spike trains and a metric
+#-------------------------------------------------------------------------------
+def getDistanceMap(trains, metric):
+  N = len(trains)
+  dMap = np.zeros([N,N])
+  for i in range(N):
+    for j in range(N):
+      if dMap[j][i] != 0 :
+        dMap[i][j] = dMap[j][i]
+      elif i != j :      
+        if metric.type == 'vR':
+          dMap[i][j] = vR_computeDistance(trains[i], trains[j], metric.tau)
+        elif metric.type == 'VP':
+          dMap[i][j] = VP_computeDistance(trains[i], trains[j], metric.q)
+  
+  return dMap
+
+
+# Compute MI and position-wise MI over spike train set using Houghton15
+#-------------------------------------------------------------------------------  
+def compute_MI (tL, binTrains, h, metric) :
+  trains = tL.trains
+  N = len(trains)
+  if h >= N :
+    raise Exception("h >= N !") 
+  
+# the ids in the distance map of the whole thing will be inherently the key ids
+  dMapS = getDistanceMap(trains, metric)
+  ylen = len(binTrains)
+  xlen = len(binTrains[0])
+  ns = ylen*xlen
+  MI_cMap = np.zeros((xlen, ylen))
+  for y in range(ylen) :
+    for x in range(xlen) :
+      ids = np.array(binTrains[y][x].ids)
+      if len(ids) > 0 :
+        for i in range(len(binTrains[y][x].trains)) :
+          idx = ids[i]
+          b_ri = dMapS[idx].argsort()[:h+1]  
+          count = len(np.intersect1d(b_ri, ids))+1
+          MI_cMap[x][y] += math.log(ns*count/h, 2)
+        MI_cMap[x][y] = MI_cMap[x][y]/len(ids)
+  MI = np.mean(MI_cMap[np.nonzero(MI_cMap)])
+ 
+  return MI_cMap, MI
+  
+
+# Plot per-squre MI Histogram yo
+#-------------------------------------------------------------------------------  
+def plotMIMaps(MI_Maps, MIs, X, Y, dxy=10, fig_id=0, string="") :
+# Set up for 3D histograms of position-wise firing rates for each neuron 
+  xlen = len(MI_Maps[0])
+  ylen = len(MI_Maps[0][0])
+  xedges = np.arange(0, np.ceil(max(X)/dxy+1)*dxy, dxy)
+  yedges = np.arange(0, np.ceil(max(Y)/dxy+1)*dxy, dxy)
+  xpos, ypos = np.meshgrid(xedges[:-1] + 0.25, yedges[:-1] + 0.25)
+  elements = (len(xedges) - 1) * (len(yedges) - 1)
+  xpos = xpos.flatten()
+  ypos = ypos.flatten()
+  zpos = np.zeros(elements)
+  dx = (dxy-1)*np.ones_like(zpos)
+  dy = dx.copy()
+# Compute and plot 3D conditional MI histogram for each neuron  
+  for i in range(len(MI_Maps)) :
+    print MI_Maps[i]
+    print "\n"
+    dz = MI_Maps[i].flatten()
+    fig = plt.figure(fig_id+i)
+    ax = Axes3D(fig)
+    nrm = mpl.colors.Normalize(min(dz),max(dz))
+    colors = cm.jet(nrm(dz)) #list of colors for each bar
+    ax.set_ylim(0, yedges[-1])
+    ax.set_xlim(0, xedges[-1])
+    ax.set_zlim(min(dz), max(dz)+1)
+    ax.set_ylabel("$y$ $(\delta y = "+str(dxy)+"$ $[cm])$", fontsize=22)   
+    ax.set_xlabel("$x$ $(\delta x = "+str(dxy)+"$ $[cm])$", fontsize=22)   
+    ax.set_zlabel("$"+string+"$ $MI$ $per$ $block$", fontsize=22)   
+    ax.set_title('$'+string+'$ $MI$ $histogram$: $neuron$ $'+str(i+1)+'$ - $\\bar{MI}='+str(round(MIs[i],2))+'$', fontsize=22)
+    c2 = ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color=colors, alpha=0.7)
+    plt.savefig('2D_'+string+'_cMI_Hist_N'+str(i+1)+'.png', bbox_inches='tight', pad_inches=0.5)
+#    plt.show()  
+
+  return
+
+
+# plot histograms of firing rates in consecutive 1s trains over the time period 
+#-------------------------------------------------------------------------------
+def plotFireRateHist(neuron, T, dt=1, fig_id=0) :
+  for n in range(len(neuron)) :
+    v, b = np.histogram(neuron[n], np.arange(np.floor(min(T)), np.ceil(max(T))+1, dt))
+    plt.figure(fig_id+n)
+    plt.bar(b[:-1],v, width=dt)
+    plt.xlabel("$Spike-train$ $intervals$ $of$ $size$ $"+str(dt)+"$ $[s]$", fontsize=22)
+    plt.ylabel("$Firing$ $rates$", fontsize=22)
+    plt.title('$Firing-rate$ $histogram:$ $neuron$ $'+str(n+1)+'$', fontsize=22)    
+    plt.savefig('FireHist_TxN'+str(n+1)+'.pdf', bbox_inches='tight', pad_inches=0.5)
+
+  return
+
+
+# Plot auto correlogarms of neurons
+#-------------------------------------------------------------------------------
+def plotAutoCorr(neuron, dt=0.001, fig_id=0, thresh=0.1) :
+# calculate time differences between consecutive spikes
+  for n in range(len(neuron)) :
+    corr = []
+    for i in range(len(neuron[n])) :
+      for j in range(len(neuron[n])) :
+        dif = neuron[n][j]-neuron[n][i]
+        if dif < thresh and dif > -thresh and dif != 0 :
+          corr += [dif]
+        
+#   compute and plot discretised histogram
+    corr = np.array(corr)
+    v, b = np.histogram(corr, np.arange(-thresh, thresh, dt) )
+    plt.figure(fig_id+n)
+    plt.bar(b[:-1], v, width=dt)
+    plt.xlabel("$betwen-spike$ $intervals$ $\delta t$ $[s]$", fontsize=22)
+    plt.ylabel("$occurance$ $count$", fontsize=22)
+    plt.title('$Autocorrelogram:$ $neuron$ $'+str(n+1)+'$', fontsize=22)
+    plt.savefig('AutoCorr_N'+str(n+1)+'_'+str(thresh)+'s.pdf', bbox_inches='tight', pad_inches=0.5) 
+
+  return
+
+
+# Compute and plot pairwise cross correlograms 
+#-------------------------------------------------------------------------------
+def plotCrossCorr(neuron, dt=0.001, fig_id=0, thresh=0.1) :
+  N = len(neuron)
+  for n1 in range(N) :
+    for n2 in range(n1+1, N) :
+      corr12, corr21 = [], [] 
+      for i in range(len(neuron[n1])) :
+        for j in range(len(neuron[n2])) :
+          dif = neuron[n2][j] - neuron[n1][i] 
+          if dif < thresh and dif > -thresh :
+            corr12 += [dif]
+      for i in range(len(neuron[n2])) :
+        for j in range(len(neuron[n1])) :
+          dif = neuron[n1][j] - neuron[n2][i] 
+          if dif < thresh and dif > -thresh :
+            corr21 += [dif]
+            
+      corr12 = np.array(corr12)
+      v12, b12 = np.histogram(corr12, np.arange(-thresh, thresh, dt) )
+      plt.figure(fig_id); fig_id += 1
+      plt.bar(b12[:-1], v12, width=dt)
+      plt.xlabel("$betwen-spike$ $intervals$ $\delta t$ $[s]$", fontsize=22)
+      plt.ylabel("$occurance$ $count$", fontsize=22)
+      plt.title('$Crosscorrelogram:$ $neuron$ $'+str(n1+1)+'$ $to$ $'+str(n2+1)+'$', fontsize=22)
+      plt.savefig('CrossCorr_N'+str(n1+1)+'xN'+str(n2+1)+'_'+str(thresh)+'s.pdf', bbox_inches='tight', pad_inches=0.5) 
+      
+      corr21 = np.array(corr21)
+      v21, b21 = np.histogram(corr21, np.arange(-thresh, thresh, dt) )
+      plt.figure(fig_id); fig_id += 1
+      plt.bar(b21[:-1], v21, width=dt)
+      plt.xlabel("$betwen-spike$ $intervals$ $\delta t$ $[s]$", fontsize=22)
+      plt.ylabel("$occurance$ $count$", fontsize=22)
+      plt.title('$Crosscorrelogram:$ $neuron$ $'+str(n2+1)+'$ $to$ $'+str(n1+1)+'$', fontsize=22)
+      plt.savefig('CrossCorr_N'+str(n2+1)+'xN'+str(n1+1)+'_'+str(thresh)+'s.pdf', bbox_inches='tight', pad_inches=0.5) 
+      
+  return
+  
+      
+# plot spiking positions of the four neurons in different colors
+#-------------------------------------------------------------------------------
+def plotAllSpikePos(spikeLocs, X, Y, fig_id=0) :
+  plt.figure(fig_id)
+  color = ['red','green','blue','cyan']
+  plt.xlim(-5, max(X)+5)
+  plt.ylim(-5, max(Y)+5) 
+  plt.xlabel("$x$", fontsize=22)
+  plt.ylabel("$y$", fontsize=22)
+  plt.title("$Firing$ $positions$ $of$ $neurons$ $1-4$", fontsize=22)
+  for i in range(len(spikeLocs)) :
+    plt.scatter(spikeLocs[i].x, spikeLocs[i].y, marker='x', color = color[i])
+  plt.title('$Friring$ $positions$: $all$ $neurons$', fontsize=22)  
+  plt.savefig('FirePos_All_N.pdf', bbox_inches='tight', pad_inches=0.5) 
+  for i in range(len(spikeLocs)) :
+    plt.figure(fig_id+i+1)
+    plt.scatter(spikeLocs[i].x, spikeLocs[i].y, marker='x', color = color[i])
+    plt.title('$Friring$ $positions$: $neuron$ $'+str(i+1)+'$', fontsize=22)
+    plt.savefig('FirePos_N'+str(i+1)+'.pdf', bbox_inches='tight', pad_inches=0.5) 
+    
+  return
+
+
+# Plot 2D colored histograms of position-wise firing rates for each neuron
+#-------------------------------------------------------------------------------
+def plot2DHists_XYxN(spikeLocs, X, Y, dxy=10, fig_id=0) :
+# Set up for 3D histograms of position-wise firing rates for each neuron 
+  xedges = np.arange(np.floor(min(X)), np.ceil(max(X)/dxy)*dxy+1, dxy)
+  yedges = np.arange(np.floor(min(Y)), np.ceil(max(Y)/dxy)*dxy+1, dxy) 
+  elements = (len(xedges) - 1) * (len(yedges) - 1)
+  xpos, ypos = np.meshgrid(xedges[:-1] + 0.25, yedges[:-1] +0.25)
+  xpos = xpos.flatten()
+  ypos = ypos.flatten()
+  zpos = np.zeros(elements)
+  dx = dxy*np.ones_like(zpos)
+  dy = dx.copy()
+# Compute and plot 3D histogram for each neuron
+  for i in range(len(spikeLocs)) :
+    hist, xedges, yedges = np.histogram2d(spikeLocs[i].y, spikeLocs[i].x, bins=(xedges,yedges))
+    dz = hist.flatten()
+    fig = plt.figure(fig_id+i)
+    ax = Axes3D(fig)
+    nrm=mpl.colors.Normalize(1,max(dz))
+    colors=cm.jet(nrm(dz)) #list of colors for each bar
+    ax.set_ylim(0, np.ceil(max(Y)/dxy)*dxy)
+    ax.set_xlim(0, np.ceil(max(X)/dxy)*dxy)
+    ax.set_zlim(0, max(dz)+1)
+    ax.set_ylabel("$y$ $(\delta y = "+str(dxy)+"$ $[cm])$", fontsize=22)   
+    ax.set_xlabel("$x$ $(\delta x = "+str(dxy)+"$ $[cm])$", fontsize=22)   
+    ax.set_zlabel("$Spike$ $count$", fontsize=22)   
+    ax.set_title('$Positional$ $firing-rate$ $histogram$: $neuron$ $'+str(i+1)+'$', fontsize=22)
+    c1 = ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color=colors, alpha = 0.6)
+    plt.savefig('2DHist_FirePos_N'+str(i+1)+'.png', bbox_inches='tight', pad_inches=0.5) 
+
+  return
+
+
+# M a i n  S c r i p t   
+#-------------------------------------------------------------------------------   
+# loading x, y, time data
+f = open("data/time.csv")
+T = np.array(map( lambda x: int(x.strip()), f.readlines() ))/10000
+T = T[:-44]
+minT = min(T)
+T -= minT
+f = open("data/x.csv")
+X = np.array(map( lambda x: float(x.strip()), f.readlines() ))
+X = X[:-44]
+X -= min(X)
+f = open("data/y.csv")
+Y = np.array(map( lambda x: float(x.strip()), f.readlines() ))
+Y = Y[:-44]
+Y -= min(Y)
+
+# loading spike-train time data of neuron 1 - 4 (in seconds: /=10000) 
+# shifting time array and spike trains s.t. time starts at zero
+# creating lists of spikes-objects
+neuron, spikeLocs, trainLocs, trainMaps, MI_Maps, MIs = [], [], [], [], [], []
+dxy = 10
+h = 50
+mili = 0.001
+metric_VP = metric('VP', q=166)
+metric_vR = metric('vR', tau=12*mili)
+metric = metric_vR
+for i in range(1,5) :
+  f = open("data/neuron"+str(i)+".csv")
+  neuron += [np.array(map( lambda x: float(x.strip()), f.readlines() ))/10000 - minT]
+  spikeLocs += [interFirePos(X, Y, T, neuron[-1])] 
+  trainLocs += [interTrainsPos(X, Y, T, neuron[-1])]
+  trainMaps += [binTrainsXY(trainLocs[-1], X, Y, dxy)]
+  MI_Map, MI = compute_MI(trainLocs[-1], trainMaps[-1], h, metric)
+  MI_Maps   += [MI_Map]
+  MIs       += [MI]
+  
+plotFireRateHist(neuron, T, dt=1, fig_id=1)
+plotAutoCorr(neuron, dt=0.001, fig_id=5, thresh=2.0)
+plotCrossCorr(neuron, dt=0.001, fig_id=9, thresh=2.0) 
+plotAllSpikePos(spikeLocs, X, Y, fig_id=22)
+plot2DHists_XYxN(spikeLocs, X, Y, dxy=dxy, fig_id=27)
+plotMIMaps(MI_Maps, MIs, X, Y, dxy=dxy, fig_id=31, string="Total")
+for i in range(len(MI_Maps)) :
+  MI_Maps[i][np.nonzero(MI_Maps[i]<MIs[i])] = 0
+  MI_Maps[i][np.nonzero(MI_Maps[i])] -= MIs[i]
+plotMIMaps(MI_Maps, MIs, X, Y, dxy=dxy, fig_id=31, string="Above-average")
