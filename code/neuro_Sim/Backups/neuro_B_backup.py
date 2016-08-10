@@ -21,7 +21,7 @@ t_S   = 10*mili        # Time scale of the synapse
 # ------------------------------------------------------------------------------
 class neuron (object):
   def __init__(self, idx, v0, st, el=None, vth=None, vres=None, rm=None,
-               i=None, tm=None, tref=None, se=None, si=None):
+               i=None, tm=None, tref=None, es=None):
     self.id     = idx                               #id in connectivity matrix
     self.type   = 'IF'                              #type of neuron
     self.v      = v0                                #membrane potential
@@ -34,13 +34,11 @@ class neuron (object):
     self.i      = I_e   if i    == None else i      #constant input current
     self.t_m    = t_M   if tm   == None else tm     #membrane time constant
     self.t_ref  = t_Ref if tref == None else tref   #refractory period
-    self.e_s    = 0     if se   == None else se     #exciting synapt potential
-    self.i_s    = -0.08 if si   == None else si     #inhibiting synapt potential
-    
+    self.e_s    = 0     if es   == None else es     #synapse reverse potential
+
 # returns value of f(V) = dV/dt
-  def f(self, V, G_es, G_is):
-    f = ( self.e_l - V + self.r_m*(G_es*(self.e_s - V) + G_is*(self.i_s - V)) +
-          self.r_m*self.i ) / self.t_m
+  def f(self, V, G_s):
+    f = (self.e_l - V + self.r_m*G_s*(self.e_s - V) + self.r_m*self.i)/self.t_m
     return f
 
 
@@ -74,35 +72,27 @@ class synapse (object):
 # Network class managing connectivty between neurons and synapses
 # ------------------------------------------------------------------------------
 class cnet (object):
-  def __init__(self, cMat, nrns, synsE, synsI):
+  def __init__(self, cMat, nrns, syns):
     self.cMat = cMat
 #   iterate through neuron/synapse ids
-    for j in range(len(synsE)):
-#     iterate through indices of exciting and inhibiting pre-synaptic neurons
-#     to neuron j and fill lists of synaptic strengths and last-spike times
-      for e in ( self.list_pre_synapt_ns_exci(synsE[j]) ):
-        synsE[j].sGs.append(cMat[e][j])
-        synsE[j].sTs.append(0 - nrns[e].sTime)
+    for j in range(len(syns)):
+#     iterate through indices of neurons pre-synaptic to neuron j
+      for i in ( self.list_pre_synapt_ns(syns[j]) ):
+#       fill list of synaptic strengths and pre-synaptic spikes
+        syns[j].sGs.append(cMat[i][j])
+        syns[j].sTs.append(0 - nrns[i].sTime)
 
-      for i in ( self.list_pre_synapt_ns_inhi(synsI[j]) ):
-        synsI[j].sGs.append(cMat[i][j])
-        synsI[j].sTs.append(0 - nrns[i].sTime)
+# update times since pre-synaptic spikes in synapse
+  def update_sTs(self, synapse, nrns, t):
+#   iterate pre-synaptic neurons ids
+    for j,k in enumerate( self.list_pre_synapt_ns(synapse) ):
+      synapse.sTs[j] = t - nrns[k].sTime
 
-# update times since pre-synaptic spikes in both synapses
-  def update_sTs(self, syn_exci, syn_inhi, nrns, t):
-      for j,k in enumerate(self.list_pre_synapt_ns_exci(syn_exci)):
-        syn_exci.sTs[j] = t - nrns[k].sTime
-      for j,k in enumerate(self.list_pre_synapt_ns_inhi(syn_inhi)):
-        syn_inhi.sTs[j] = t - nrns[k].sTime
-        
 # return pre-synaptic neurons reaching parameter synapse
-  def list_pre_synapt_ns_exci (self, synapse):
+  def list_pre_synapt_ns (self, synapse):
     cMat = self.cMat; id = synapse.id
-    return [item for sublist in np.nonzero(cMat[:,id] > 0) for item in sublist]
+    return [item for sublist in np.nonzero(cMat[:,id]) for item in sublist]
 
-  def list_pre_synapt_ns_inhi (self, synapse):
-    cMat = self.cMat; id = synapse.id
-    return [item for sublist in np.nonzero(cMat[:,id] < 0) for item in sublist]
 
 # ------------------------------------------------------------------------------
 # Class simulating a network of neurons given:
@@ -118,8 +108,7 @@ class netSim (object) :
     self.allNrns  = Nrns
     self.neurons  = []
     self.poissons = []
-    self.synsExci = []
-    self.synsInhi = []
+    self.synapses = []
     self.cMat     = cMat                     #connectivity matrix
     self.t        = np.arange(0, T, dt)      #time array
     self.dt       = dt                       #time step
@@ -130,45 +119,39 @@ class netSim (object) :
         if h_t == None :
            self.allNrns[i].sTrain = []
         self.neurons.append(self.allNrns[i])
-        self.synsExci.append(synapse(i, self.dt))
-        self.synsInhi.append(synapse(i, self.dt))
+        self.synapses.append(synapse(i, self.dt))
       elif Nrns[i].type == 'P':
         self.poissons.append(self.allNrns[i])
         
-    self.cNet   = cnet(cMat, self.allNrns, self.synsExci, self.synsInhi)
+    self.cNet   = cnet(cMat, self.allNrns, self.synapses)
 #   arrays storing simulation data - potential and conductivity over time
     self.vSim   = np.zeros([len(self.neurons), len(self.t)])
-    self.gSimE  = np.zeros([len(self.neurons), len(self.t)])
-    self.gSimI  = np.zeros([len(self.neurons), len(self.t)])
+    self.gSim   = np.zeros([len(self.neurons), len(self.t)])
     self.raster = np.zeros([len(self.allNrns), len(self.t)])*np.nan
 
 # Compute membrane potential at a single timeslice using RK4 appximation
-  def getV(self, nrn, t, Gs_1e, Gs_1i, Gs_23e, Gs_23i, Gs_4e, Gs_4i):
+  def getV(self, nrn, t, Gs_1, Gs_23, Gs_4):
     if nrn.v >= nrn.v_th :             #track spikes and reset potential
       nrn.v = nrn.v_res
     elif t < nrn.sTime + nrn.t_ref :   #hold reset if refracory period
       nrn.v = nrn.v_res
     else :                             #inegreate using RK4 method
-      k1 = self.dt*nrn.f(nrn.v, Gs_1e, Gs_1i )
-      k2 = self.dt*nrn.f(nrn.v + k1/2, Gs_23e, Gs_23i)
-      k3 = self.dt*nrn.f(nrn.v + k2/2, Gs_23e, Gs_23i)
-      k4 = self.dt*nrn.f(nrn.v + k3, Gs_4e, Gs_4i)
+      k1 = self.dt*nrn.f(nrn.v, Gs_1 )
+      k2 = self.dt*nrn.f(nrn.v + k1/2, Gs_23)
+      k3 = self.dt*nrn.f(nrn.v + k2/2, Gs_23)
+      k4 = self.dt*nrn.f(nrn.v + k3, Gs_4)
       nrn.v += 1/6*(k1 + 2*k2 + 2*k3 + k4)
     return nrn.v
 
 # Simulate network
   def simulate(self):
     for i, t in enumerate(self.t) :
-      for j in range(len(self.neurons)) :             #update conductances
-        self.cNet.update_sTs(self.synsExci[j], self.synsInhi[j], self.allNrns,t)
-        self.gSimE[j,i] = self.synsExci[j].conduct()
-        self.gSimI[j,i] = self.synsInhi[j].conduct()
-        
+      for j in range(len(self.synapses)) :             #update conductances
+        self.cNet.update_sTs(self.synapses[j], self.allNrns, t)
+        self.gSim[j,i] = self.synapses[j].conduct()
       for j in range(len(self.neurons)) :              #update potentials
-        self.vSim[j,i] = self.getV(self.neurons[j], t, 
-                                 self.synsExci[j].Gs_1,  self.synsInhi[j].Gs_1,
-                                 self.synsExci[j].Gs_23, self.synsInhi[j].Gs_23,
-                                 self.synsExci[j].Gs_4,  self.synsInhi[j].Gs_4)
+        self.vSim[j,i] = self.getV(self.neurons[j], t, self.synapses[j].Gs_1,
+                         self.synapses[j].Gs_23,self.synapses[j].Gs_4)
         if self.neurons[j].v >= self.neurons[j].v_th : #record IF spikes
           self.neurons[j].sTime = t
           self.neurons[j].sTrain += [self.ht + t]
@@ -179,7 +162,7 @@ class netSim (object) :
           self.raster[self.poissons[p].id][i] = self.poissons[p].id
     for j in range(len(self.allNrns)) :                #reset sTimes
       self.allNrns[j].sTime = - (t - self.allNrns[j].sTime)
-    return self.vSim, self.gSimE, self.raster
+    return self.vSim, self.gSim, self.raster
 
 
 # ------------------------------------------------------------------------------
