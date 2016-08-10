@@ -52,7 +52,7 @@ class synapse (object):
     self.dt     = dt
     self.sTs   = []                           #times since pre-synaptic spikes
     self.sGs   = []                           #synaptic strengths
-    self.Gs_1  = 0                            #summed synaptic conductance
+    self.Gs_1  = 0                           #summed synaptic conductance
     self.Gs_23 = 0
     self.Gs_4  = 0
 
@@ -113,7 +113,6 @@ class netSim (object) :
     self.t        = np.arange(0, T, dt)      #time array
     self.dt       = dt                       #time step
     self.ht       = 0 if h_t==None else h_t  #chronologic time incurred
-    
     for i in range(len(self.allNrns)) :      #neurons and synapse objects
       if self.allNrns[i].type == 'IF':
         if h_t == None :
@@ -122,7 +121,6 @@ class netSim (object) :
         self.synapses.append(synapse(i, self.dt))
       elif Nrns[i].type == 'P':
         self.poissons.append(self.allNrns[i])
-        
     self.cNet   = cnet(cMat, self.allNrns, self.synapses)
 #   arrays storing simulation data - potential and conductivity over time
     self.vSim   = np.zeros([len(self.neurons), len(self.t)])
@@ -169,12 +167,11 @@ class netSim (object) :
 # Class generating Poisson neuron
 # ------------------------------------------------------------------------------
 class pNeuron (object):
-  def __init__(self, idx, sRate, T, dt, st, label=None):
+  def __init__(self, idx, sRate, T, dt, st):
     self.id     = idx            #index in connectivity matrix
     self.type   = 'P'
     self.sTime  = st             #time of last spike
     self.T      = T
-    self.label  = label
 
     self.sTrain, self.count = getPoissonTrain2(T, dt, sRate)
 
@@ -290,6 +287,7 @@ def vR_computeDistance_mappedTrains(f1, f2, dt) :
   return dist, diff
 
 
+
 # ------------------------------------------------------------------------------
 # objects to store the settings for a metric
 # ------------------------------------------------------------------------------
@@ -324,6 +322,7 @@ def getDistanceMap(trains, metric):
   return dMap
 
 
+
 # ------------------------------------------------------------------------------
 # Class to store all components of a simulation experiment
 # ------------------------------------------------------------------------------
@@ -336,22 +335,20 @@ class experiment(object):
     self.rasters    = []      #raster plots of all trials
 
 
+
 # ------------------------------------------------------------------------------
 # Compute MI between stimuli and responses using the Bialek method
 # ------------------------------------------------------------------------------
+
 # Map spike-train fragments to binary words (for the Bialek method)
 def B_parseTrain(spikes, dt, T, fsize) :
-  fno = int(T/fsize)
-  if fno != T/fsize :
-    raise Exception("Frame length doesn't divide spike train period!")
-
-  flen = int(fsize/dt)
-  if flen != fsize/dt :
-    raise Exception("Bin size doesn't divide frame length!")
-
   time = np.arange(0, T, dt)   # spike train time span array
   word = ""                    # spike train as binary word
   s_i = 0                      # spike idx // MAKE GENERIC IN TERMS OF dt
+  fno = int(T/fsize)
+  if fno != T/fsize :
+    raise Exception("Frame length doesn't divide spike train period!")
+  flen = int(fsize/dt)
 
   for i, t_i in enumerate(time) :
     if spikes[s_i] >= t_i and spikes[s_i] < (t_i+dt):
@@ -369,72 +366,116 @@ def B_parseTrain(spikes, dt, T, fsize) :
   return words
 
 
+
+# RESHAPE ARRAYS BACK TO INITIAL STIMULUS GROUPING
+def B_stimSortTrains (S, p, PS, stimuli, repeats, R) :
+  times = int(len(S)/stimuli)
+  t_size = stimuli**(PS-1-p)*repeats #current column's tuples size
+  p_size = stimuli**(PS-p)*repeats   #parent column's tuples size
+  for s in range(stimuli) :
+    for t in range(times) :
+      i = s*times + t
+      mod_i = i % times
+      _modi = i % t_size
+      j = int(mod_i/t_size)*p_size + s*t_size + _modi
+      S[i], S[j] = S[j], S[i]
+      R[i], R[j] = R[j], R[i]
+
+  return(S,R)
+
+
+
 # Compute the total entropy of a set of spike-train segments
-def B_computeS(R) :
-  N = len(R)*len(R[0])
-# use a dictionary mapping distinct segments to their number of ocurrances
-  D = {}
+def B_computeS(r) :
+# reshape by grouping same frames of different spike-trains responses together
+  N = len(r)
+  R = np.swapaxes(r, 0, 1)
+
+# create a dictionary for each set of spike-train frames, each mapping
+# distinct segment words to their number of ocurrances in the frame set
+  D = []
   for i in range(len(R)) :
-    for f in range(len(R[i])) :
-      if R[i][f] in D :
-        D[R[i][f]] += 1
+    d = {}
+    for j in range(len(R[i])) :
+      if R[i][j] in d :
+        d[R[i][j]] += 1
       else :
-        D[R[i][f]]  = 1
-# Compute the entropy of all frames over the set spike train responses
+        d[R[i][j]]  = 1
+    D.append(d)
+# Compute the entropy of each frame over the set spike train responses
+#  H = []
   S = 0
-  for w in D :
-    p_w = D[w]/N
-    S -= p_w*math.log(p_w, 2)
+  for f in range(len(D)) :
+    H_f = 0
+    for w in D[f] :
+      p_w = D[f][w]/N
+      H_f -= p_w*math.log(p_w)
+#    H.append(H_f)
+    S += H_f
 
   return S
 
 
+
 # Compute the conditional or noise entropy of Responses given Stimuli segments
-def B_computeN(S, R, times) :
-  D = {}
-  stim = S[0].label
-  n = times*len(R[0])     # total no. of frames in all responses to a stimulus
-  T = int(len(S)/times)   # number of stimuli
-  N = 0                   # Conditional / Noise entropy
+def B_computeN(S, stimuli, R) :
+  times = int(len(S)/stimuli)
+  R = np.swapaxes(R, 0, 1)
+  D = []
+  for f in range(len(R)) :
+    D.append({})
 
+#  CH = []
+  N =  0
   for i in range(len(S)) :
-    if S[i].label != stim :
-      SH = 0
-      for w in D :
-        p_w  = D[w]/n
-        SH -= p_w*math.log(p_w, 2)
-      N += SH/T
-      stim = S[i].label
-      D = {}
-
-    for f in range(len(R[i])) :
-      if R[i][f] in D :
-        D[R[i][f]] += 1
+#   std loop procedure for processing current stimulus
+    for f in range(len(R)) :
+      if R[f][i] in D[f] :
+        D[f][R[f][i]] += 1
       else :
-        D[R[i][f]]  = 1
+        D[f][R[f][i]]  = 1
+#   if we just finished processing a stimulus
+    if (i+1) % times == 0 :
+#     compute the frame-wise entropy conditioned on the finished stimulus
+      SCH = 0
+      for f in range(len(R)) :
+        SCH_f = 0
+        for w in D[f] :
+          p_w = D[f][w]/times
+          SCH_f -= p_w*math.log(p_w)
+#       the total summed entropy over frames, conditioned on finished stimulus
+        SCH += SCH_f
+#     CH.append(SCH)
+      N += SCH/stimuli
+#     reinitialise dictionary for next stimulus estimations
+      D = []
+      for f in range(len(R)) :
+        D.append({})
 
   return N
 
 
+
 # Compute MI using Bialek as the difference between S and N
-def B_MI(S, R, dt, T, fsize, times) :
+def B_MI(S, p, PS, stimuli, repeats, R, dt, T, fsize) :
+  #print "p = "+str(p)
   if len(S) != len(R) :
      raise Exception("|S| != |R| !")
-
+  if p != 0 :
+    S, R = B_stimSortTrains(S, p, PS, stimuli, repeats, R)
   rWords=[]
   for i in range(len(R)) :
     rWords.append(B_parseTrain(R[i], dt, T, fsize))
   rWords = np.array(rWords)
 
   H  = B_computeS(rWords)
-  print 'S = ' +str(H)
-  CH = B_computeN(S, rWords, times)
-  print 'N = ' + str(CH)
-  MI  = H - CH
-  print 'I = ' + str(MI)
-  print '\n'
+#  print H
+  CH = B_computeN(S, stimuli, rWords)
+#  print CH
+  I  = H - CH
+#  print I
 
-  return MI
+  return I
 
 
 # ------------------------------------------------------------------------------
